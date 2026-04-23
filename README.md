@@ -14,8 +14,7 @@ A full-stack platform for managing your journey to Financial Independence, Retir
 ## Features (POC)
 
 - **FIRE Calculator** — Input savings, contributions, expenses, and return rate to project your FIRE date with an interactive chart
-- **CoastFIRE Calculator** — Find the savings threshold where you can stop contributing and coast to retirement
-- **Multiple FIRE Types** — LeanFIRE, FIRE, FatFIRE, CoastFIRE
+- **Multiple FIRE Types** — FIRE, CoastFIRE
 - **Dashboard** — Overview of your FI number, progress, and FIRE age from your last calculation
 - **Auth** — Email/password via Supabase, JWT-validated on the backend
 
@@ -99,7 +98,6 @@ manage-fire/
 │       │   ├── AuthPage.tsx
 │       │   ├── Dashboard.tsx
 │       │   ├── FireCalculator.tsx
-│       │   ├── CoastFireCalculator.tsx
 │       │   └── Profile.tsx
 │       ├── components/       # Layout, Sidebar, StatCard, ProtectedRoute
 │       ├── utils/
