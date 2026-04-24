@@ -1,4 +1,4 @@
-import type { FireInputs, FireResult, YearlyProjection } from '../types'
+import type { Account, FireInputs, FireResult, MonteCarloResult, PercentileBand, YearlyProjection } from '../types'
 
 function findMilestoneAge(
   projections: YearlyProjection[],
@@ -14,69 +14,141 @@ function findMilestoneAge(
   return { age: null, year: null }
 }
 
+// Box-Muller transform
+function sampleNormal(mean: number, stddev: number): number {
+  let u = 0, v = 0
+  while (u === 0) u = Math.random()
+  while (v === 0) v = Math.random()
+  return mean + stddev * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v)
+}
+
+function computePercentile(sorted: number[], p: number): number {
+  const idx = (p / 100) * (sorted.length - 1)
+  const lower = Math.floor(idx)
+  const upper = Math.ceil(idx)
+  if (lower === upper) return sorted[lower]
+  return sorted[lower] + (sorted[upper] - sorted[lower]) * (idx - lower)
+}
+
+export function accountEffectiveMonthly(acc: Account): number {
+  const perYear =
+    acc.contributionFrequency === 'monthly' ? acc.contributionAmount * 12
+    : acc.contributionFrequency === 'semi-monthly' ? acc.contributionAmount * 24
+    : acc.contributionAmount * 26
+  const capped = acc.annualCap !== null ? Math.min(perYear, acc.annualCap) : perYear
+  return capped / 12
+}
+
+function totalEffectiveMonthly(accounts: Account[]): number {
+  return accounts.reduce((s, a) => s + accountEffectiveMonthly(a), 0)
+}
+
+const MC_RUNS = 1000
+
+function runMonteCarlo(inputs: FireInputs, fiNumber: number): MonteCarloResult {
+  const { currentAge, retirementAge, accounts, expectedAnnualReturn, returnStdDev, events } = inputs
+
+  const baseMonthlyContrib = totalEffectiveMonthly(accounts)
+  const currentInvestments = accounts.reduce((s, a) => s + a.currentBalance, 0)
+
+  const maxYears = Math.min(60, 100 - currentAge)
+  const retirementYear = Math.min(retirementAge - currentAge, maxYears)
+  const numPoints = maxYears + 1
+  const trajectorysByYear: number[][] = Array.from({ length: numPoints }, () => [])
+  let successes = 0
+
+  for (let sim = 0; sim < MC_RUNS; sim++) {
+    let investments = currentInvestments
+    let effectiveMonthly = baseMonthlyContrib
+    let effectiveAnnualReturn = expectedAnnualReturn
+
+    for (let year = 0; year <= maxYears; year++) {
+      const age = currentAge + year
+
+      for (const event of events.filter((e) => e.age === age)) {
+        if (event.type === 'windfall') {
+          investments += event.amount
+        } else if (event.type === 'home_purchase') {
+          investments = Math.max(0, investments - event.downpayment)
+          effectiveMonthly = Math.max(0, effectiveMonthly - event.monthlyContribReduction)
+        } else if (event.type === 'contribution_change') {
+          effectiveMonthly = event.newMonthlyAmount
+        } else if (event.type === 'return_change') {
+          effectiveAnnualReturn = event.newAnnualReturn
+        }
+      }
+
+      trajectorysByYear[year].push(investments)
+      if (year === retirementYear && investments >= fiNumber) successes++
+
+      // Clamp annual return to avoid extreme negative values blowing up calculations
+      const annualReturn = Math.max(-0.9, sampleNormal(effectiveAnnualReturn / 100, returnStdDev / 100))
+      const monthlyReturn = Math.pow(1 + annualReturn, 1 / 12) - 1
+      for (let m = 0; m < 12; m++) {
+        investments = Math.max(0, investments * (1 + monthlyReturn) + effectiveMonthly)
+      }
+    }
+  }
+
+  const bands: PercentileBand[] = trajectorysByYear.map((yearValues, year) => {
+    const sorted = [...yearValues].sort((a, b) => a - b)
+    return {
+      age: currentAge + year,
+      p10: Math.round(computePercentile(sorted, 10)),
+      p25: Math.round(computePercentile(sorted, 25)),
+      p50: Math.round(computePercentile(sorted, 50)),
+      p75: Math.round(computePercentile(sorted, 75)),
+      p90: Math.round(computePercentile(sorted, 90)),
+    }
+  })
+
+  return {
+    successRate: Math.round((successes / MC_RUNS) * 100),
+    bands,
+  }
+}
+
 export function calculateFire(inputs: FireInputs): FireResult {
-  const {
-    currentAge, retirementAge,
-    currentSavings, savingsGrowthRate,
-    currentInvestments, contributionAmount, contributionFrequency,
-    annualExpenses, expectedAnnualReturn, withdrawalRate,
-    events,
-  } = inputs
+  const { currentAge, retirementAge, accounts, annualExpenses, expectedAnnualReturn, withdrawalRate, events, monteCarloEnabled } = inputs
 
-  // Normalize contribution to monthly
-  const baseMonthlyContrib = contributionFrequency === 'biweekly'
-    ? (contributionAmount * 26) / 12
-    : contributionAmount
+  const currentInvestments = accounts.reduce((s, a) => s + a.currentBalance, 0)
+  const baseMonthlyContrib = totalEffectiveMonthly(accounts)
 
-  const rInvMonthly = expectedAnnualReturn / 100 / 12
-  const rSavMonthly = savingsGrowthRate / 100 / 12
+  const rInvMonthlyBase = expectedAnnualReturn / 100 / 12
+  let rInvMonthly = rInvMonthlyBase
 
-  // FIRE milestone targets — lean/fat derived from annual expenses
   const fiNumber = annualExpenses * (100 / withdrawalRate)
-
   const isAlreadyFi = currentInvestments >= fiNumber
   const progressPercentage = fiNumber > 0 ? Math.min(100, (currentInvestments / fiNumber) * 100) : 0
 
-  // Projection loop — apply events at the start of each age year
   const projections: YearlyProjection[] = []
   let investments = currentInvestments
-  let savings = currentSavings
   let effectiveMonthly = baseMonthlyContrib
   const maxYears = Math.min(60, 100 - currentAge)
 
   for (let year = 0; year <= maxYears; year++) {
     const age = currentAge + year
 
-    // Events fire at the beginning of the age year they're set on
     for (const event of events.filter((e) => e.age === age)) {
       if (event.type === 'windfall') {
-        if (event.destination === 'investments') investments += event.amount
-        else savings += event.amount
+        investments += event.amount
       } else if (event.type === 'home_purchase') {
-        if (event.source === 'investments') {
-          investments = Math.max(0, investments - event.downpayment)
-        } else {
-          savings = Math.max(0, savings - event.downpayment)
-        }
+        investments = Math.max(0, investments - event.downpayment)
         effectiveMonthly = Math.max(0, effectiveMonthly - event.monthlyContribReduction)
+      } else if (event.type === 'contribution_change') {
+        effectiveMonthly = event.newMonthlyAmount
+      } else if (event.type === 'return_change') {
+        rInvMonthly = event.newAnnualReturn / 100 / 12
       }
     }
 
-    projections.push({
-      year,
-      age,
-      investments: Math.round(investments),
-      savings: Math.round(savings),
-    })
+    projections.push({ year, age, investments: Math.round(investments) })
 
-    // Compound forward one year with monthly periods
     for (let m = 0; m < 12; m++) {
       investments = investments * (1 + rInvMonthly) + effectiveMonthly
-      savings = savings * (1 + rSavMonthly)
     }
   }
 
-  // CoastFIRE number: how much invested today grows to fiNumber by retirement with no contributions
   const yearsToRetirement = Math.max(0, retirementAge - currentAge)
   const rInvAnnual = expectedAnnualReturn / 100
   const coastFireNumber =
@@ -89,15 +161,14 @@ export function calculateFire(inputs: FireInputs): FireResult {
     regular: { label: 'FIRE',      fiNumber: Math.round(fiNumber),         ...findMilestoneAge(projections, fiNumber,        currentInvestments), color: '#059669' },
   }
 
-  // Monthly contribution needed to reach fiNumber by retirement age (ignoring events)
   const monthsToRetirement = yearsToRetirement * 12
   let monthlyNeededForTarget: number | null = null
   if (monthsToRetirement > 0) {
-    if (rInvMonthly > 0) {
-      const fvCurrent = currentInvestments * Math.pow(1 + rInvMonthly, monthsToRetirement)
+    if (rInvMonthlyBase > 0) {
+      const fvCurrent = currentInvestments * Math.pow(1 + rInvMonthlyBase, monthsToRetirement)
       const remaining = fiNumber - fvCurrent
       monthlyNeededForTarget =
-        remaining <= 0 ? 0 : (remaining * rInvMonthly) / (Math.pow(1 + rInvMonthly, monthsToRetirement) - 1)
+        remaining <= 0 ? 0 : (remaining * rInvMonthlyBase) / (Math.pow(1 + rInvMonthlyBase, monthsToRetirement) - 1)
     } else {
       monthlyNeededForTarget = Math.max(0, (fiNumber - currentInvestments) / monthsToRetirement)
     }
@@ -114,6 +185,7 @@ export function calculateFire(inputs: FireInputs): FireResult {
     isAlreadyFi,
     progressPercentage: Math.round(progressPercentage * 10) / 10,
     milestones,
+    monteCarloResult: monteCarloEnabled ? runMonteCarlo(inputs, fiNumber) : null,
   }
 }
 
