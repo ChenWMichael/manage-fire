@@ -262,18 +262,19 @@ function ReturnChangeForm({ event, onChange, onDelete }: {
 
 const ACCOUNT_TEMPLATES: {
   name: string
+  shortLabel: string
   taxType: AccountTaxType
   annualCap: number | null
   defaultFrequency: ContributionFrequency
   defaultAmount: number
 }[] = [
-  { name: 'Taxable Brokerage',   taxType: 'taxable',   annualCap: null,   defaultFrequency: 'monthly',      defaultAmount: 1_000 },
-  { name: 'Traditional 401(k)',  taxType: 'pre-tax',   annualCap: 23_500, defaultFrequency: 'semi-monthly', defaultAmount: 979 },
-  { name: 'Traditional IRA',     taxType: 'pre-tax',   annualCap: 7_000,  defaultFrequency: 'monthly',      defaultAmount: 583 },
-  { name: 'Roth 401(k)',         taxType: 'roth',      annualCap: 23_500, defaultFrequency: 'semi-monthly', defaultAmount: 979 },
-  { name: 'Roth IRA',            taxType: 'roth',      annualCap: 7_000,  defaultFrequency: 'monthly',      defaultAmount: 583 },
-  { name: 'Mega Backdoor Roth',  taxType: 'roth',      annualCap: 46_500, defaultFrequency: 'monthly',      defaultAmount: 3_875 },
-  { name: 'HSA',                 taxType: 'pre-tax',   annualCap: 4_300,  defaultFrequency: 'monthly',      defaultAmount: 358 },
+  { name: 'Taxable Brokerage',  shortLabel: 'Taxable',      taxType: 'taxable',   annualCap: null,   defaultFrequency: 'monthly',      defaultAmount: 1_000 },
+  { name: 'Traditional 401(k)', shortLabel: 'Trad 401(k)',  taxType: 'pre-tax',   annualCap: 23_500, defaultFrequency: 'semi-monthly', defaultAmount: 979 },
+  { name: 'Traditional IRA',    shortLabel: 'Trad IRA',     taxType: 'pre-tax',   annualCap: 7_000,  defaultFrequency: 'monthly',      defaultAmount: 583 },
+  { name: 'Roth 401(k)',        shortLabel: 'Roth 401(k)',  taxType: 'roth',      annualCap: 23_500, defaultFrequency: 'semi-monthly', defaultAmount: 979 },
+  { name: 'Roth IRA',           shortLabel: 'Roth IRA',     taxType: 'roth',      annualCap: 7_000,  defaultFrequency: 'monthly',      defaultAmount: 583 },
+  { name: 'Mega Backdoor Roth', shortLabel: 'Mega Backdoor',taxType: 'roth',      annualCap: 46_500, defaultFrequency: 'monthly',      defaultAmount: 3_875 },
+  { name: 'HSA',                shortLabel: 'HSA',          taxType: 'pre-tax',   annualCap: 4_300,  defaultFrequency: 'monthly',      defaultAmount: 358 },
 ]
 
 const TAX_COLORS: Record<AccountTaxType, string> = {
@@ -370,7 +371,9 @@ function AccountForm({ account, onChange, onDelete }: {
 // ─── Chart tooltip ────────────────────────────────────────────────────────────
 
 interface TooltipPayload { value: number; dataKey: string; color: string }
-function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: TooltipPayload[]; label?: number }) {
+function ChartTooltip({ active, payload, label, nominal }: {
+  active?: boolean; payload?: TooltipPayload[]; label?: number; nominal?: boolean
+}) {
   if (!active || !payload?.length) return null
   const inv = payload.find((p) => p.dataKey === 'investments')
   const p10 = payload.find((p) => p.dataKey === 'mcP10')
@@ -378,7 +381,10 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
   const p90 = payload.find((p) => p.dataKey === 'mcP90')
   return (
     <div className="card px-4 py-3 shadow-lg text-sm min-w-[190px]">
-      <p className="font-semibold text-slate-800 mb-2">Age {label}</p>
+      <div className="flex items-center justify-between gap-4 mb-2">
+        <p className="font-semibold text-slate-800">Age {label}</p>
+        {nominal && <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">nominal $</span>}
+      </div>
       {inv && (
         <div className="flex justify-between gap-6">
           <div className="flex items-center gap-1.5">
@@ -427,22 +433,36 @@ const PORTFOLIO_MILESTONES = [
   { amount: 10_000_000, label: '$10M',  bg: 'bg-pink-50',    badge: 'bg-pink-100 text-pink-700' },
 ]
 
-function ProjectionTable({ result, withdrawalRate, annualExpenses, retirementAge, coast, regular }: {
+function ProjectionTable({ result, withdrawalRate, annualExpenses, retirementAge, coast, regular, nominal, inflationRate, currentAge, selectedAccountId }: {
   result: FireResult
   withdrawalRate: number
   annualExpenses: number
   retirementAge: number
   coast: Milestone
   regular: Milestone
+  nominal: boolean
+  inflationRate: number
+  currentAge: number
+  selectedAccountId: string | null
 }) {
-  const { projections, fiNumber } = result
+  const projections = selectedAccountId
+    ? (result.accountProjections[selectedAccountId] ?? result.projections)
+    : result.projections
+  const { fiNumber } = result
+
+  const factor = (age: number) =>
+    nominal ? Math.pow(1 + inflationRate / 100, age - currentAge) : 1
+
   return (
     <div className="overflow-auto max-h-96">
       <table className="w-full text-xs">
         <thead className="sticky top-0 bg-white border-b border-slate-200 z-10">
           <tr>
             <th className="text-left font-semibold text-slate-500 px-3 py-2 w-12">Age</th>
-            <th className="text-right font-semibold text-slate-500 px-3 py-2">Portfolio</th>
+            <th className="text-right font-semibold text-slate-500 px-3 py-2">
+              {selectedAccountId ? 'Account Balance' : 'Portfolio'}
+              {nominal && <span className="font-normal text-amber-500 ml-1">(nom.)</span>}
+            </th>
             <th className="text-right font-semibold text-slate-500 px-3 py-2 hidden sm:table-cell">
               Withdrawal/yr <span className="font-normal text-slate-400">@ {withdrawalRate}%</span>
             </th>
@@ -453,16 +473,17 @@ function ProjectionTable({ result, withdrawalRate, annualExpenses, retirementAge
         <tbody>
           {projections.map((p, i) => {
             const prev = projections[i - 1]
+            const displayInv = Math.round(p.investments * factor(p.age))
             const portfolioMs = PORTFOLIO_MILESTONES.find(
               (m) => p.investments >= m.amount && (!prev || prev.investments < m.amount),
             )
-            const isCoast = coast.age !== null && p.age === coast.age
-            const isFire = regular.age !== null && p.age === regular.age
-            const isRetirement = p.age === retirementAge && !isFire
+            const isCoast = !selectedAccountId && coast.age !== null && p.age === coast.age
+            const isFire = !selectedAccountId && regular.age !== null && p.age === regular.age
+            const isRetirement = !selectedAccountId && p.age === retirementAge && !isFire
 
             const pct = fiNumber > 0 ? (p.investments / fiNumber) * 100 : 0
-            const withdrawal = p.investments * (withdrawalRate / 100)
-            const coveragePct = annualExpenses > 0 ? (withdrawal / annualExpenses) * 100 : 0
+            const withdrawal = displayInv * (withdrawalRate / 100)
+            const coveragePct = annualExpenses > 0 ? (withdrawal / (annualExpenses * factor(p.age))) * 100 : 0
 
             const rowBg = isFire
               ? 'bg-emerald-50'
@@ -475,7 +496,7 @@ function ProjectionTable({ result, withdrawalRate, annualExpenses, retirementAge
             return (
               <tr key={p.age} className={`border-b border-slate-50 ${rowBg}`}>
                 <td className="px-3 py-1.5 font-medium text-slate-600">{p.age}</td>
-                <td className="px-3 py-1.5 text-right font-semibold text-slate-900">{formatCurrency(p.investments)}</td>
+                <td className="px-3 py-1.5 text-right font-semibold text-slate-900">{formatCurrency(displayInv)}</td>
                 <td className="px-3 py-1.5 text-right hidden sm:table-cell">
                   <span className={coveragePct >= 100 ? 'text-emerald-600 font-semibold' : 'text-slate-500'}>
                     {formatCurrency(withdrawal)}
@@ -521,6 +542,9 @@ export default function FireCalculator() {
   const [inputs, setInputs] = useState<FireInputs>(DEFAULT_INPUTS)
   const [saved, setSaved] = useState(false)
   const [showTable, setShowTable] = useState(false)
+  const [nominal, setNominal] = useState(false)
+  const [inflationRate, setInflationRate] = useState(3)
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
 
   const set = <K extends keyof FireInputs>(key: K, value: FireInputs[K]) => {
     setInputs((prev) => ({ ...prev, [key]: value }))
@@ -563,48 +587,66 @@ export default function FireCalculator() {
   const updateAccount = (updated: Account) =>
     set('accounts', inputs.accounts.map((a) => (a.id === updated.id ? updated : a)))
 
-  const deleteAccount = (id: string) =>
+  const deleteAccount = (id: string) => {
+    if (selectedAccountId === id) setSelectedAccountId(null)
     set('accounts', inputs.accounts.filter((a) => a.id !== id))
+  }
 
   const result: FireResult = useMemo(() => calculateFire(inputs), [inputs])
 
   const chartData = useMemo(() => {
+    const projections = selectedAccountId
+      ? (result.accountProjections[selectedAccountId] ?? result.projections)
+      : result.projections
+
     const milestoneAges = Object.values(result.milestones).map((m) => m.age).filter((a): a is number => a !== null)
     const cap = Math.max(
       inputs.currentAge + 20,
       ...milestoneAges.map((a) => a + 5),
       inputs.retirementAge + 3,
     )
-    const bandMap = result.monteCarloResult
+    const bandMap = !selectedAccountId && result.monteCarloResult
       ? new Map(result.monteCarloResult.bands.map((b) => [b.age, b]))
       : null
 
-    return result.projections
+    const f = (age: number) => nominal ? Math.pow(1 + inflationRate / 100, age - inputs.currentAge) : 1
+
+    return projections
       .filter((p) => p.age <= Math.min(cap, inputs.currentAge + 55))
       .map((p) => {
         const band = bandMap?.get(p.age)
+        const scale = f(p.age)
         return {
           age: p.age,
-          investments: p.investments,
-          // Stacked area data: transparent offset + filled spread = visual band
-          mcOffset: band?.p10,
-          mcSpread: band ? band.p90 - band.p10 : undefined,
-          mcMidOffset: band?.p25,
-          mcMidSpread: band ? band.p75 - band.p25 : undefined,
-          mcP10: band?.p10,
-          mcP50: band?.p50,
-          mcP90: band?.p90,
+          investments: Math.round(p.investments * scale),
+          mcOffset: band ? Math.round(band.p10 * scale) : undefined,
+          mcSpread: band ? Math.round((band.p90 - band.p10) * scale) : undefined,
+          mcMidOffset: band ? Math.round(band.p25 * scale) : undefined,
+          mcMidSpread: band ? Math.round((band.p75 - band.p25) * scale) : undefined,
+          mcP10: band ? Math.round(band.p10 * scale) : undefined,
+          mcP50: band ? Math.round(band.p50 * scale) : undefined,
+          mcP90: band ? Math.round(band.p90 * scale) : undefined,
+          nominalFiTarget: !selectedAccountId && nominal
+            ? Math.round(result.fiNumber * scale)
+            : undefined,
         }
       })
-  }, [result, inputs.currentAge, inputs.retirementAge])
+  }, [result, inputs.currentAge, inputs.retirementAge, selectedAccountId, nominal, inflationRate])
 
   const { coast, regular } = result.milestones
 
-  const yMax = Math.max(
-    regular.fiNumber * 1.5,
-    chartData.at(-1)?.investments ?? 0,
-    chartData.at(-1)?.mcP90 ?? 0,
-  )
+  const yMax = useMemo(() => {
+    const last = chartData.at(-1)
+    const maxData = Math.max(
+      last?.investments ?? 0,
+      last?.mcP90 ?? 0,
+      last?.nominalFiTarget ?? 0,
+    )
+    const fiTarget = nominal
+      ? result.fiNumber * Math.pow(1 + inflationRate / 100, Math.max(0, inputs.retirementAge - inputs.currentAge))
+      : result.fiNumber
+    return Math.max(maxData, fiTarget) * 1.3
+  }, [chartData, result.fiNumber, nominal, inflationRate, inputs.retirementAge, inputs.currentAge])
 
   const totalBalance = inputs.accounts.reduce((s, a) => s + a.currentBalance, 0)
   const totalMonthly = inputs.accounts.reduce((s, a) => s + accountEffectiveMonthly(a), 0)
@@ -676,12 +718,12 @@ export default function FireCalculator() {
 
             <div>
               <p className="text-xs font-medium text-slate-500 mb-2">Add account</p>
-              <div className="grid grid-cols-3 gap-1.5">
+              <div className="grid grid-cols-4 gap-1.5">
                 {ACCOUNT_TEMPLATES.map((t) => (
                   <button key={t.name} onClick={() => addAccount(t)}
-                    className="flex items-center justify-center gap-1 text-[11px] font-semibold text-slate-600 bg-slate-100 px-2 py-1.5 rounded-lg hover:bg-slate-200 transition-colors leading-tight text-center">
-                    <Plus size={10} className="shrink-0" />
-                    <span>{t.name.replace('Traditional ', '').replace(' Brokerage', '')}</span>
+                    className="flex items-center justify-center gap-1 h-8 text-[11px] font-semibold text-slate-600 bg-slate-100 px-1.5 rounded-lg hover:bg-slate-200 transition-colors leading-tight text-center">
+                    <Plus size={9} className="shrink-0" />
+                    <span className="truncate">{t.shortLabel}</span>
                   </button>
                 ))}
               </div>
@@ -809,7 +851,56 @@ export default function FireCalculator() {
 
           {/* Chart */}
           <div className="card p-5 pb-4">
-            <h2 className="text-sm font-semibold text-slate-700 mb-3">Portfolio Projection</h2>
+            {/* Chart header: title + nominal/real toggle */}
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-slate-700">Portfolio Projection</h2>
+              <div className="flex items-center gap-2">
+                {nominal && (
+                  <div className="flex items-center gap-1 text-xs text-slate-500">
+                    <span>Inflation</span>
+                    <input
+                      type="number" value={inflationRate} min={0} max={20} step={0.5}
+                      onChange={(e) => setInflationRate(Number(e.target.value))}
+                      className="w-12 text-xs text-center border border-slate-200 rounded px-1 py-0.5 bg-white"
+                    />
+                    <span>%/yr</span>
+                  </div>
+                )}
+                <button
+                  onClick={() => setNominal((v) => !v)}
+                  className={`text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors ${
+                    nominal ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                  }`}
+                >
+                  {nominal ? 'Nominal $' : 'Real $'}
+                </button>
+              </div>
+            </div>
+
+            {/* Account selector tabs */}
+            {inputs.accounts.length > 1 && (
+              <div className="flex flex-wrap gap-1 mb-3">
+                <button
+                  onClick={() => setSelectedAccountId(null)}
+                  className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
+                    !selectedAccountId ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                  }`}
+                >
+                  All accounts
+                </button>
+                {inputs.accounts.map((acc) => (
+                  <button
+                    key={acc.id}
+                    onClick={() => setSelectedAccountId(acc.id)}
+                    className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
+                      selectedAccountId === acc.id ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                    }`}
+                  >
+                    {acc.name}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <ResponsiveContainer width="100%" height={440}>
               <ComposedChart data={chartData} margin={{ top: 16, right: 12, left: 8, bottom: 24 }}>
@@ -829,16 +920,16 @@ export default function FireCalculator() {
                   tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false}
                   tickFormatter={(v: number) => formatCurrency(v)} />
 
-                <Tooltip content={<ChartTooltip />} />
+                <Tooltip content={(props: any) => <ChartTooltip {...props} nominal={nominal} />} />
 
-                {/* FIRE milestone reference lines */}
-                {[coast, regular].map((m) => (
+                {/* FIRE milestone reference lines (real-dollar targets) — shown in all modes */}
+                {!selectedAccountId && [coast, regular].map((m) => (
                   <ReferenceLine key={m.label} y={m.fiNumber} stroke={m.color}
                     strokeDasharray="6 4" strokeWidth={1.5} />
                 ))}
 
-                {/* Monte Carlo bands — rendered behind the main lines */}
-                {mc && (
+                {/* Monte Carlo bands */}
+                {!selectedAccountId && mc && (
                   <>
                     <Area stackId="mc" type="monotone" dataKey="mcOffset"
                       fillOpacity={0} stroke="none" dot={false} legendType="none" activeDot={false} />
@@ -859,8 +950,14 @@ export default function FireCalculator() {
                   </>
                 )}
 
+                {/* Nominal FI target line — growing dashed line showing inflation-adjusted target */}
+                {nominal && !selectedAccountId && (
+                  <Line type="monotone" dataKey="nominalFiTarget" stroke="#f59e0b" strokeWidth={1.5}
+                    strokeDasharray="5 3" dot={false} legendType="none" activeDot={false} />
+                )}
+
                 {/* Vertical age markers where milestones are crossed */}
-                {[coast, regular].map((m) =>
+                {!selectedAccountId && [coast, regular].map((m) =>
                   m.age !== null && m.age > inputs.currentAge ? (
                     <ReferenceLine key={`v-${m.label}`} x={m.age}
                       stroke={m.color} strokeWidth={1} strokeOpacity={0.35} />
@@ -896,15 +993,21 @@ export default function FireCalculator() {
             <div className="flex flex-wrap gap-x-5 gap-y-2 mt-3">
               <div className="flex items-center gap-2 text-xs text-slate-600">
                 <div className="w-8 h-3 rounded-sm bg-fire-400 opacity-70" />
-                <span>Investments</span>
+                <span>{selectedAccountId ? inputs.accounts.find(a => a.id === selectedAccountId)?.name ?? 'Account' : 'Investments'}</span>
               </div>
-              {[coast, regular].map((m) => (
+              {!selectedAccountId && [coast, regular].map((m) => (
                 <div key={m.label} className="flex items-center gap-2 text-xs text-slate-600">
                   <div className="w-8 border-t-2 border-dashed" style={{ borderColor: m.color }} />
-                  <span>{m.label} <span className="text-slate-400">({formatCurrency(m.fiNumber)})</span></span>
+                  <span>{m.label} <span className="text-slate-400">({formatCurrency(m.fiNumber)} real)</span></span>
                 </div>
               ))}
-              {mc && (
+              {nominal && !selectedAccountId && (
+                <div className="flex items-center gap-2 text-xs text-slate-600">
+                  <div className="w-8 border-t-2 border-dashed border-amber-400" />
+                  <span className="text-amber-600">FI target (nominal)</span>
+                </div>
+              )}
+              {!selectedAccountId && mc && (
                 <div className="flex items-center gap-2 text-xs text-slate-600">
                   <div className="w-8 border-t-2 border-dashed border-emerald-400" />
                   <span className="text-slate-400">P10 / P50 / P90</span>
@@ -916,12 +1019,17 @@ export default function FireCalculator() {
                   <span>Life event</span>
                 </div>
               )}
+              {nominal && (
+                <div className="text-xs text-amber-600 font-medium ml-auto">
+                  Nominal · {inflationRate}% inflation
+                </div>
+              )}
             </div>
           </div>
 
           {/* Key numbers */}
           <div className="card p-5">
-            <h2 className="text-sm font-semibold text-slate-700 mb-3">Key Numbers</h2>
+            <h2 className="text-sm font-semibold text-slate-700 mb-3">Key Numbers <span className="text-xs font-normal text-slate-400">(real dollars)</span></h2>
             <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
               {[
                 ['FI Number', formatCurrencyFull(result.fiNumber)],
@@ -948,7 +1056,13 @@ export default function FireCalculator() {
             >
               <div className="text-left">
                 <h2 className="text-sm font-semibold text-slate-700">Year-by-Year Projection</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Portfolio growth with milestone markers</p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {selectedAccountId
+                    ? `${inputs.accounts.find(a => a.id === selectedAccountId)?.name ?? 'Account'} · individual view`
+                    : 'Portfolio growth with milestone markers'
+                  }
+                  {nominal ? ' · nominal $' : ' · real $'}
+                </p>
               </div>
               <ChevronDown size={15} className={`text-slate-400 transition-transform duration-200 ${showTable ? 'rotate-180' : ''}`} />
             </button>
@@ -961,6 +1075,10 @@ export default function FireCalculator() {
                   retirementAge={inputs.retirementAge}
                   coast={coast}
                   regular={regular}
+                  nominal={nominal}
+                  inflationRate={inflationRate}
+                  currentAge={inputs.currentAge}
+                  selectedAccountId={selectedAccountId}
                 />
               </div>
             )}

@@ -95,6 +95,7 @@ export interface FireResult {
   monthlyNeededForTarget: number | null
   effectiveMonthlyContrib: number
   projections: YearlyProjection[]
+  accountProjections: Record<string, YearlyProjection[]>
   isAlreadyFi: boolean
   progressPercentage: number
   milestones: {

@@ -174,6 +174,20 @@ export function calculateFire(inputs: FireInputs): FireResult {
     }
   }
 
+  const accountProjections: Record<string, YearlyProjection[]> = {}
+  for (const acc of accounts) {
+    const accMonthly = accountEffectiveMonthly(acc)
+    let accBal = acc.currentBalance
+    const accProj: YearlyProjection[] = []
+    for (let year = 0; year <= maxYears; year++) {
+      accProj.push({ year, age: currentAge + year, investments: Math.round(accBal) })
+      for (let m = 0; m < 12; m++) {
+        accBal = accBal * (1 + rInvMonthlyBase) + accMonthly
+      }
+    }
+    accountProjections[acc.id] = accProj
+  }
+
   return {
     fiNumber: Math.round(fiNumber),
     yearsToFire: milestones.regular.year,
@@ -182,6 +196,7 @@ export function calculateFire(inputs: FireInputs): FireResult {
     monthlyNeededForTarget: monthlyNeededForTarget !== null ? Math.round(monthlyNeededForTarget) : null,
     effectiveMonthlyContrib: Math.round(baseMonthlyContrib),
     projections,
+    accountProjections,
     isAlreadyFi,
     progressPercentage: Math.round(progressPercentage * 10) / 10,
     milestones,
