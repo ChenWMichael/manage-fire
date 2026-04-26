@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard'
 import FireCalculator from './pages/FireCalculator'
 import FireFlowchart from './pages/FireFlowchart'
 import CareerSimulator from './pages/CareerSimulator'
+import RentBuyCalculator from './pages/RentBuyCalculator'
 import LandingPage from './pages/LandingPage'
 import Profile from './pages/Profile'
 
@@ -24,6 +25,7 @@ export default function App() {
           <Route path="calculator" element={<FireCalculator />} />
           <Route path="flowchart" element={<FireFlowchart />} />
           <Route path="career" element={<CareerSimulator />} />
+          <Route path="rent-vs-buy" element={<RentBuyCalculator />} />
 
           {/* Protected: require sign-in */}
           <Route
