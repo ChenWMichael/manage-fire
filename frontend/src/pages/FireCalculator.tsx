@@ -1,5 +1,6 @@
 import { CheckCircle, ChevronDown, Home, Info, Plus, Trash2, TrendingUp, Wallet, Zap } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import HintTooltip from '../components/HintTooltip'
 import {
   Area,
   CartesianGrid,
@@ -66,14 +67,7 @@ function Field({
     <div>
       <label className="flex items-center gap-1 text-sm font-medium text-slate-700 mb-1">
         {label}
-        {hint && (
-          <span className="group relative inline-flex">
-            <Info size={11} className="text-slate-400 cursor-help" />
-            <span className="pointer-events-none absolute bottom-5 left-0 bg-slate-800 text-white text-xs rounded-lg px-2.5 py-2 w-56 opacity-0 group-hover:opacity-100 transition-opacity z-20 leading-relaxed">
-              {hint}
-            </span>
-          </span>
-        )}
+        {hint && <HintTooltip hint={hint} />}
       </label>
       <div className="relative">
         {prefix && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm select-none">{prefix}</span>}
