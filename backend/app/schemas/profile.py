@@ -1,10 +1,19 @@
+from enum import Enum
 from typing import Optional
-from pydantic import BaseModel
+
+from pydantic import BaseModel, Field
+
+
+class FireType(str, Enum):
+    lean = "lean"
+    regular = "regular"
+    coast = "coast"
+    fat = "fat"
 
 
 class ProfileUpdate(BaseModel):
-    full_name: Optional[str] = None
-    fire_type: Optional[str] = None
+    full_name: Optional[str] = Field(default=None, max_length=200)
+    fire_type: Optional[FireType] = None
 
 
 class ScenarioCreate(BaseModel):
