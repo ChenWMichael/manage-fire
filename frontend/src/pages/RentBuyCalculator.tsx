@@ -1,11 +1,15 @@
 import {
+  CheckCircle,
   ChevronDown,
   ChevronUp,
   Home,
   TrendingUp,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import HintTooltip from '../components/HintTooltip'
+import { useAuth } from '../hooks/useAuth'
+import { saveSnapshot } from '../lib/api'
 import {
   Area,
   CartesianGrid,
@@ -241,10 +245,14 @@ function YearTable({ data }: { data: ReturnType<typeof calculateRentVsBuy>['year
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default function RentBuyCalculator() {
+  const { user } = useAuth()
+  const navigate = useNavigate()
   const [inputs, setInputs] = useState<RentBuyInputs>(DEFAULT_INPUTS)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [showTable, setShowTable] = useState(false)
   const [chartView, setChartView] = useState<'networth' | 'monthly'>('networth')
+  const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState(false)
 
   const set = <K extends keyof RentBuyInputs>(key: K, value: RentBuyInputs[K]) =>
     setInputs((prev) => ({ ...prev, [key]: value }))
@@ -618,6 +626,42 @@ export default function RentBuyCalculator() {
               </div>
             )}
           </div>
+
+          <button
+            onClick={async () => {
+              if (!user) { navigate('/auth'); return }
+              setSaveError(false)
+              try {
+                const date = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                await saveSnapshot(
+                  'rent_buy',
+                  `Rent vs. Buy — ${date}`,
+                  inputs as unknown as Record<string, unknown>,
+                  {
+                    recommendation,
+                    breakEvenYear,
+                    buyFinalNetWorth,
+                    rentFinalNetWorth,
+                    netWorthDifference: result.netWorthDifference,
+                    homePrice: inputs.homePrice,
+                    monthlyRent: inputs.monthlyRent,
+                    state: inputs.state,
+                  },
+                )
+                setSaved(true)
+                setTimeout(() => setSaved(false), 3000)
+              } catch {
+                setSaveError(true)
+                setTimeout(() => setSaveError(false), 3000)
+              }
+            }}
+            className={`w-full py-2.5 rounded-lg text-sm font-semibold border transition-all duration-150 flex items-center justify-center gap-2 ${
+              saved ? 'bg-violet-50 border-violet-200 text-violet-700' : saveError ? 'bg-red-50 border-red-200 text-red-700' : 'btn-secondary'
+            }`}
+          >
+            {saved ? <CheckCircle size={14} /> : null}
+            {saved ? 'Saved to dashboard' : saveError ? 'Save failed — try again' : 'Save to dashboard'}
+          </button>
         </div>
 
         {/* ── RIGHT: Results ────────────────────────────────────────────── */}

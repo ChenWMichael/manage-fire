@@ -5,8 +5,9 @@ import AuthPage from './pages/AuthPage'
 import Dashboard from './pages/Dashboard'
 import FireCalculator from './pages/FireCalculator'
 import FireFlowchart from './pages/FireFlowchart'
-import CareerSimulator from './pages/CareerSimulator'
+import OfferSimulator from './pages/OfferSimulator'
 import RentBuyCalculator from './pages/RentBuyCalculator'
+import HouseAffordabilityCalculator from './pages/HouseAffordabilityCalculator'
 import LandingPage from './pages/LandingPage'
 import Profile from './pages/Profile'
 
@@ -24,8 +25,9 @@ export default function App() {
           {/* Public: calculator works without an account */}
           <Route path="calculator" element={<FireCalculator />} />
           <Route path="flowchart" element={<FireFlowchart />} />
-          <Route path="career" element={<CareerSimulator />} />
+          <Route path="offer" element={<OfferSimulator />} />
           <Route path="rent-vs-buy" element={<RentBuyCalculator />} />
+          <Route path="house-affordability" element={<HouseAffordabilityCalculator />} />
 
           {/* Protected: require sign-in */}
           <Route

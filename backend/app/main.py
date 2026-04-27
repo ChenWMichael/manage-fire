@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routes import fire, profile
+from app.routes import fire, profile, snapshots
 
 app = FastAPI(
     title="ManageFIRE API",
@@ -20,6 +20,7 @@ app.add_middleware(
 
 app.include_router(fire.router, prefix="/api")
 app.include_router(profile.router, prefix="/api")
+app.include_router(snapshots.router, prefix="/api")
 
 
 @app.get("/api/health")

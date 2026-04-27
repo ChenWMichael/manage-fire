@@ -1,6 +1,8 @@
 import { CheckCircle, ChevronDown, Home, Info, Plus, Trash2, TrendingUp, Wallet, Zap } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import HintTooltip from '../components/HintTooltip'
+import { useAuth } from '../hooks/useAuth'
+import { saveSnapshot } from '../lib/api'
 import {
   Area,
   CartesianGrid,
@@ -533,8 +535,10 @@ function ProjectionTable({ result, withdrawalRate, annualExpenses, retirementAge
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default function FireCalculator() {
+  const { user } = useAuth()
   const [inputs, setInputs] = useState<FireInputs>(DEFAULT_INPUTS)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState(false)
   const [showTable, setShowTable] = useState(false)
   const [nominal, setNominal] = useState(false)
   const [inflationRate, setInflationRate] = useState(3)
@@ -804,17 +808,40 @@ export default function FireCalculator() {
           </div>
 
           <button
-            onClick={() => {
+            onClick={async () => {
               localStorage.setItem('mf_last_result', JSON.stringify({ result, fireType: 'regular' }))
+              setSaveError(false)
+              if (user) {
+                try {
+                  const date = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                  await saveSnapshot(
+                    'fire',
+                    `FIRE Plan — ${date}`,
+                    inputs as unknown as Record<string, unknown>,
+                    {
+                      fiNumber: result.fiNumber,
+                      fireAge: result.fireAge,
+                      yearsToFire: result.yearsToFire,
+                      progressPercentage: result.progressPercentage,
+                      coastFireNumber: result.coastFireNumber,
+                      isAlreadyFi: result.isAlreadyFi,
+                    },
+                  )
+                } catch {
+                  setSaveError(true)
+                  setTimeout(() => setSaveError(false), 3000)
+                  return
+                }
+              }
               setSaved(true)
               setTimeout(() => setSaved(false), 3000)
             }}
             className={`w-full py-2.5 rounded-lg text-sm font-semibold border transition-all duration-150 flex items-center justify-center gap-2 ${
-              saved ? 'bg-fire-50 border-fire-200 text-fire-700' : 'btn-secondary'
+              saved ? 'bg-fire-50 border-fire-200 text-fire-700' : saveError ? 'bg-red-50 border-red-200 text-red-700' : 'btn-secondary'
             }`}
           >
             {saved ? <CheckCircle size={14} /> : null}
-            {saved ? 'Saved to dashboard' : 'Save to dashboard'}
+            {saved ? 'Saved to dashboard' : saveError ? 'Save failed — try again' : 'Save to dashboard'}
           </button>
         </div>
 
