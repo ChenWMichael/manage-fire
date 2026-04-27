@@ -16,7 +16,7 @@ async def get_current_user(
             token,
             settings.supabase_jwt_secret,
             algorithms=["HS256"],
-            options={"verify_aud": False},
+            audience="authenticated",
         )
         user_id: str = payload.get("sub")
         if not user_id:
