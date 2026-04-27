@@ -97,3 +97,35 @@ create trigger set_profiles_updated_at
 create trigger set_scenarios_updated_at
   before update on public.fire_scenarios
   for each row execute procedure public.set_updated_at();
+
+-- ─── Calculator Snapshots ─────────────────────────────────────────────────────
+-- Generic JSONB-based table used by all calculators (FIRE, Rent vs. Buy,
+-- House Affordability, Offer Simulator). Replaces fire_scenarios for active use.
+create table if not exists public.calculator_snapshots (
+  id               uuid primary key default gen_random_uuid(),
+  user_id          uuid references auth.users(id) on delete cascade not null,
+  name             text not null,
+  calculator_type  text not null check (calculator_type in ('fire', 'rent_buy', 'house_affordability', 'offer')),
+  inputs           jsonb not null default '{}'::jsonb,
+  summary          jsonb not null default '{}'::jsonb,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now()
+);
+
+alter table public.calculator_snapshots enable row level security;
+
+create policy "Users can view own snapshots"
+  on public.calculator_snapshots for select
+  using (auth.uid() = user_id);
+
+create policy "Users can insert own snapshots"
+  on public.calculator_snapshots for insert
+  with check (auth.uid() = user_id);
+
+create policy "Users can delete own snapshots"
+  on public.calculator_snapshots for delete
+  using (auth.uid() = user_id);
+
+create trigger set_snapshots_updated_at
+  before update on public.calculator_snapshots
+  for each row execute function public.set_updated_at();
