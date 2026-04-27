@@ -1,6 +1,7 @@
 import {
   BarChart3,
   Briefcase,
+  Building2,
   Calculator,
   ChevronRight,
   Flame,
@@ -17,8 +18,9 @@ import { useAuth } from '../hooks/useAuth'
 const navItems = [
   { to: '/app/calculator', icon: Calculator, label: 'FIRE Calculator', public: true },
   { to: '/app/flowchart', icon: GitBranch, label: 'FIRE Flow Guide', public: true },
-  { to: '/app/career', icon: Briefcase, label: 'Career Simulator', public: true },
+  { to: '/app/offer', icon: Briefcase, label: 'Offer Simulator', public: true },
   { to: '/app/rent-vs-buy', icon: Home, label: 'Rent vs. Buy', public: true },
+  { to: '/app/house-affordability', icon: Building2, label: 'House Affordability', public: true },
   { to: '/app/dashboard', icon: LayoutDashboard, label: 'Dashboard', public: false },
   { to: '/app/profile', icon: User, label: 'Profile', public: false },
 ]

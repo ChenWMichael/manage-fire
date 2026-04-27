@@ -1,5 +1,8 @@
 import { useMemo, useState } from 'react'
-import { Briefcase, Plus, Trash2 } from 'lucide-react'
+import { Briefcase, CheckCircle, Plus, Trash2 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../hooks/useAuth'
+import { saveSnapshot } from '../lib/api'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -485,10 +488,14 @@ function YearTable({
 
 // ─── Main ──────────────────────────────────────────────────────────────────────
 
-export default function CareerSimulator() {
+export default function OfferSimulator() {
+  const { user } = useAuth()
+  const navigate = useNavigate()
   const [offers, setOffers] = useState<Offer[]>([DEFAULT_OFFER()])
   const [filingStatus, setFilingStatus] = useState<FilingStatus>('single')
   const [selectedYear, setSelectedYear] = useState<1 | 2 | 3 | 4>(1)
+  const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState(false)
 
   const addOffer = () => {
     if (offers.length < 3) setOffers(prev => [...prev, DEFAULT_OFFER()])
@@ -593,6 +600,40 @@ export default function CareerSimulator() {
       {/* Year-by-year table */}
       <div className="mb-6">
         <YearTable offers={offers} filingStatus={filingStatus} colors={OFFER_COLORS} />
+      </div>
+
+      <div className="mb-6">
+        <button
+          onClick={async () => {
+            if (!user) { navigate('/auth'); return }
+            setSaveError(false)
+            try {
+                const date = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                const fourYearTotals = offers.map((o) => ({
+                  label: o.label,
+                  totalNet: ([1, 2, 3, 4] as const).reduce((sum, y) => sum + calcYear(o, y, filingStatus).netIncome, 0),
+                  totalGross: ([1, 2, 3, 4] as const).reduce((sum, y) => sum + calcYear(o, y, filingStatus).grossTotal, 0),
+                }))
+                await saveSnapshot(
+                  'offer',
+                  `Offer Comparison — ${date}`,
+                  { offers, filingStatus } as unknown as Record<string, unknown>,
+                  { fourYearTotals, offerCount: offers.length, filingStatus },
+                )
+                setSaved(true)
+                setTimeout(() => setSaved(false), 3000)
+              } catch {
+                setSaveError(true)
+                setTimeout(() => setSaveError(false), 3000)
+              }
+            }}
+            className={`w-full py-2.5 rounded-lg text-sm font-semibold border transition-all duration-150 flex items-center justify-center gap-2 ${
+              saved ? 'bg-slate-100 border-slate-300 text-slate-700' : saveError ? 'bg-red-50 border-red-200 text-red-700' : 'btn-secondary'
+            }`}
+          >
+            {saved ? <CheckCircle size={14} /> : null}
+            {saved ? 'Saved to dashboard' : saveError ? 'Save failed — try again' : 'Save to dashboard'}
+        </button>
       </div>
 
       <p className="text-xs text-slate-400 text-center">

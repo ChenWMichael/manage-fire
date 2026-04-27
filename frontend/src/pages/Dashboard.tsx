@@ -1,8 +1,13 @@
-import { ArrowRight, Calculator, Flame, Target, TrendingUp, Waves, Zap } from 'lucide-react'
+import {
+  ArrowRight, Briefcase, Calculator, Flame, Home, Target, Trash2,
+  TrendingUp, Waves, Zap,
+} from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import StatCard from '../components/StatCard'
 import { useAuth } from '../hooks/useAuth'
+import { deleteSnapshot, getSnapshots } from '../lib/api'
+import type { Snapshot } from '../lib/api'
 import type { FireResult } from '../types'
 import { FIRE_TYPE_META } from '../types'
 import { formatCurrency, formatCurrencyFull } from '../utils/fireCalculations'
@@ -16,18 +21,176 @@ const tools = [
     color: 'bg-fire-50 border-fire-100 hover:border-fire-300',
     iconColor: 'text-fire-600 bg-fire-100',
   },
+  {
+    to: '/app/rent-vs-buy',
+    icon: Home,
+    title: 'Rent vs. Buy',
+    description: 'Compare long-term wealth: home equity vs. investing the down payment.',
+    color: 'bg-violet-50 border-violet-100 hover:border-violet-300',
+    iconColor: 'text-violet-600 bg-violet-100',
+  },
+  {
+    to: '/app/house-affordability',
+    icon: Target,
+    title: 'House Affordability',
+    description: 'Find your comfortable max home price based on income and DTI ratios.',
+    color: 'bg-emerald-50 border-emerald-100 hover:border-emerald-300',
+    iconColor: 'text-emerald-600 bg-emerald-100',
+  },
+  {
+    to: '/app/offer',
+    icon: Briefcase,
+    title: 'Offer Simulator',
+    description: 'Compare job offers side-by-side with after-tax income breakdown.',
+    color: 'bg-slate-50 border-slate-200 hover:border-slate-400',
+    iconColor: 'text-slate-600 bg-slate-200',
+  },
 ]
+
+function SnapshotCard({ snapshot, onDelete }: { snapshot: Snapshot; onDelete: () => void }) {
+  const [deleting, setDeleting] = useState(false)
+
+  const handleDelete = async () => {
+    setDeleting(true)
+    try {
+      await deleteSnapshot(snapshot.id)
+      onDelete()
+    } catch {
+      setDeleting(false)
+    }
+  }
+
+  const date = new Date(snapshot.created_at).toLocaleDateString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+  })
+
+  const summary = snapshot.summary as Record<string, unknown>
+
+  const renderSummary = () => {
+    if (snapshot.calculator_type === 'fire') {
+      return (
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs mt-2">
+          <span className="text-slate-500">FI Number</span>
+          <span className="font-semibold text-slate-800 text-right">{formatCurrency(summary.fiNumber as number)}</span>
+          <span className="text-slate-500">Progress</span>
+          <span className="font-semibold text-slate-800 text-right">{summary.progressPercentage as number}%</span>
+          <span className="text-slate-500">FIRE Age</span>
+          <span className="font-semibold text-slate-800 text-right">
+            {summary.isAlreadyFi ? "FIRE'd!" : summary.fireAge ? `Age ${summary.fireAge as number}` : '—'}
+          </span>
+          <span className="text-slate-500">CoastFIRE</span>
+          <span className="font-semibold text-slate-800 text-right">{formatCurrency(summary.coastFireNumber as number)}</span>
+        </div>
+      )
+    }
+    if (snapshot.calculator_type === 'rent_buy') {
+      const rec = summary.recommendation as string
+      const recColor = rec === 'buy' ? 'text-violet-700' : rec === 'rent' ? 'text-sky-700' : 'text-amber-700'
+      return (
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs mt-2">
+          <span className="text-slate-500">Recommendation</span>
+          <span className={`font-semibold text-right uppercase ${recColor}`}>{rec}</span>
+          <span className="text-slate-500">Break-Even</span>
+          <span className="font-semibold text-slate-800 text-right">
+            {summary.breakEvenYear ? `Year ${summary.breakEvenYear as number}` : 'N/A'}
+          </span>
+          <span className="text-slate-500">Buy 30yr NW</span>
+          <span className="font-semibold text-slate-800 text-right">{formatCurrency(summary.buyFinalNetWorth as number)}</span>
+          <span className="text-slate-500">Rent 30yr NW</span>
+          <span className="font-semibold text-slate-800 text-right">{formatCurrency(summary.rentFinalNetWorth as number)}</span>
+        </div>
+      )
+    }
+    if (snapshot.calculator_type === 'house_affordability') {
+      return (
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs mt-2">
+          <span className="text-slate-500">Max Price</span>
+          <span className="font-semibold text-slate-800 text-right">{formatCurrency(summary.maxAffordablePrice as number)}</span>
+          <span className="text-slate-500">Monthly PITI</span>
+          <span className="font-semibold text-slate-800 text-right">{formatCurrencyFull(summary.monthlyPayment as number)}</span>
+          <span className="text-slate-500">Rate</span>
+          <span className="font-semibold text-slate-800 text-right">{(summary.effectiveRate as number).toFixed(2)}%</span>
+          <span className="text-slate-500">State</span>
+          <span className="font-semibold text-slate-800 text-right">{summary.state as string}</span>
+        </div>
+      )
+    }
+    if (snapshot.calculator_type === 'offer') {
+      type FourYrEntry = { label: string; totalNet: number; totalGross: number }
+      const totals = (summary.fourYearTotals as FourYrEntry[]) ?? []
+      return (
+        <div className="space-y-1 text-xs mt-2">
+          {totals.map((t) => (
+            <div key={t.label} className="flex justify-between">
+              <span className="text-slate-500 truncate max-w-[120px]">{t.label}</span>
+              <span className="font-semibold text-slate-800">{formatCurrency(t.totalNet)} net / 4yr</span>
+            </div>
+          ))}
+        </div>
+      )
+    }
+    return null
+  }
+
+  const typeIcon: Record<string, React.ElementType> = {
+    fire: Calculator,
+    rent_buy: Home,
+    house_affordability: Target,
+    offer: Briefcase,
+  }
+  const typeLabel: Record<string, string> = {
+    fire: 'FIRE Calculator',
+    rent_buy: 'Rent vs. Buy',
+    house_affordability: 'House Affordability',
+    offer: 'Offer Simulator',
+  }
+  const typeColor: Record<string, string> = {
+    fire: 'bg-fire-50 text-fire-600',
+    rent_buy: 'bg-violet-50 text-violet-600',
+    house_affordability: 'bg-emerald-50 text-emerald-600',
+    offer: 'bg-slate-100 text-slate-600',
+  }
+
+  const Icon = typeIcon[snapshot.calculator_type] ?? Calculator
+
+  return (
+    <div className="card p-4 space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${typeColor[snapshot.calculator_type]}`}>
+            <Icon size={13} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-800 truncate">{snapshot.name}</p>
+            <p className="text-xs text-slate-400">{typeLabel[snapshot.calculator_type]} · {date}</p>
+          </div>
+        </div>
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          className="p-1 rounded text-slate-300 hover:text-red-400 transition-colors flex-shrink-0"
+          aria-label="Delete snapshot"
+        >
+          <Trash2 size={13} />
+        </button>
+      </div>
+      {renderSummary()}
+    </div>
+  )
+}
 
 export default function Dashboard() {
   const { user } = useAuth()
   const [lastResult, setLastResult] = useState<FireResult | null>(null)
   const [fireType, setFireType] = useState<string>('regular')
+  const [snapshots, setSnapshots] = useState<Snapshot[]>([])
+  const [snapshotsLoading, setSnapshotsLoading] = useState(true)
 
   useEffect(() => {
     const stored = localStorage.getItem('mf_last_result')
     if (stored) {
       try {
-        const parsed = JSON.parse(stored)
+        const parsed = JSON.parse(stored) as { result: FireResult; fireType: string }
         setLastResult(parsed.result)
         setFireType(parsed.fireType || 'regular')
       } catch {
@@ -36,7 +199,18 @@ export default function Dashboard() {
     }
   }, [])
 
-  const name = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'there'
+  useEffect(() => {
+    getSnapshots()
+      .then(setSnapshots)
+      .catch(() => setSnapshots([]))
+      .finally(() => setSnapshotsLoading(false))
+  }, [])
+
+  const removeSnapshot = (id: string) => setSnapshots((prev) => prev.filter((s) => s.id !== id))
+
+  const name = user?.user_metadata?.full_name as string | undefined
+    || user?.email?.split('@')[0]
+    || 'there'
   const typeMeta = FIRE_TYPE_META[fireType as keyof typeof FIRE_TYPE_META] || FIRE_TYPE_META.regular
 
   return (
@@ -57,7 +231,7 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Stats */}
+      {/* FIRE Stats */}
       {lastResult ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
@@ -70,14 +244,14 @@ export default function Dashboard() {
           <StatCard
             label="Progress"
             value={`${lastResult.progressPercentage}%`}
-            subtext={lastResult.isAlreadyFi ? 'You\'ve reached FI!' : 'of your FI number'}
+            subtext={lastResult.isAlreadyFi ? "You've reached FI!" : 'of your FI number'}
             icon={TrendingUp}
             iconColor="text-fire-500"
             trend={lastResult.isAlreadyFi ? 'up' : 'neutral'}
           />
           <StatCard
             label={lastResult.isAlreadyFi ? 'Status' : 'FIRE Age'}
-            value={lastResult.isAlreadyFi ? 'FIRE\'d!' : lastResult.fireAge ? `Age ${lastResult.fireAge}` : 'Not reached'}
+            value={lastResult.isAlreadyFi ? "FIRE'd!" : lastResult.fireAge ? `Age ${lastResult.fireAge}` : 'Not reached'}
             subtext={lastResult.yearsToFire !== null && !lastResult.isAlreadyFi ? `${lastResult.yearsToFire} years away` : undefined}
             icon={Zap}
             iconColor={lastResult.isAlreadyFi ? 'text-fire-500' : 'text-amber-500'}
@@ -125,6 +299,27 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Saved Snapshots */}
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900 mb-4">Saved Snapshots</h2>
+        {snapshotsLoading ? (
+          <div className="card p-6 text-center text-slate-400 text-sm">Loading…</div>
+        ) : snapshots.length === 0 ? (
+          <div className="card p-6 text-center border-dashed">
+            <p className="text-slate-500 text-sm">No saved snapshots yet.</p>
+            <p className="text-slate-400 text-xs mt-1">
+              Use "Save to dashboard" in any calculator to pin a result here.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {snapshots.map((s) => (
+              <SnapshotCard key={s.id} snapshot={s} onDelete={() => removeSnapshot(s.id)} />
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Tools */}
       <div>

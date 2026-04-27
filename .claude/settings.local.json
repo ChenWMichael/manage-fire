@@ -3,7 +3,8 @@
     "allow": [
       "Bash(npm install *)",
       "Bash(timeout 8 npm run dev)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(npx vite *)"
     ]
   }
 }
