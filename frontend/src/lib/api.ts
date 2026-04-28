@@ -47,6 +47,27 @@ export async function getSnapshots(): Promise<Snapshot[]> {
   return res.json() as Promise<Snapshot[]>
 }
 
+export async function getSnapshot(id: string): Promise<Snapshot> {
+  const headers = await authHeaders()
+  const res = await fetch(`${API_BASE}/snapshots/${id}`, { headers })
+  if (!res.ok) throw new Error('Failed to fetch snapshot')
+  return res.json() as Promise<Snapshot>
+}
+
+export async function updateSnapshot(
+  id: string,
+  data: Partial<Pick<Snapshot, 'name' | 'inputs' | 'summary'>>,
+): Promise<Snapshot> {
+  const headers = await authHeaders()
+  const res = await fetch(`${API_BASE}/snapshots/${id}`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) throw new Error('Failed to update snapshot')
+  return res.json() as Promise<Snapshot>
+}
+
 export async function deleteSnapshot(id: string): Promise<void> {
   const headers = await authHeaders()
   const res = await fetch(`${API_BASE}/snapshots/${id}`, {

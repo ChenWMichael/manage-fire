@@ -1,8 +1,9 @@
 import { CheckCircle, ChevronDown, Home, Info, Plus, Trash2, TrendingUp, Wallet, Zap } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import HintTooltip from '../components/HintTooltip'
 import { useAuth } from '../hooks/useAuth'
-import { saveSnapshot } from '../lib/api'
+import { getSnapshot, saveSnapshot, updateSnapshot } from '../lib/api'
 import {
   Area,
   CartesianGrid,
@@ -536,13 +537,26 @@ function ProjectionTable({ result, withdrawalRate, annualExpenses, retirementAge
 
 export default function FireCalculator() {
   const { user } = useAuth()
+  const [searchParams] = useSearchParams()
   const [inputs, setInputs] = useState<FireInputs>(DEFAULT_INPUTS)
+  const [snapshotId, setSnapshotId] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState(false)
   const [showTable, setShowTable] = useState(false)
   const [nominal, setNominal] = useState(false)
   const [inflationRate, setInflationRate] = useState(3)
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const id = searchParams.get('snapshot')
+    if (!id) return
+    getSnapshot(id)
+      .then((snap) => {
+        setInputs(snap.inputs as unknown as FireInputs)
+        setSnapshotId(snap.id)
+      })
+      .catch(() => { /* fall through to defaults */ })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = <K extends keyof FireInputs>(key: K, value: FireInputs[K]) => {
     setInputs((prev) => ({ ...prev, [key]: value }))
@@ -812,21 +826,24 @@ export default function FireCalculator() {
               localStorage.setItem('mf_last_result', JSON.stringify({ result, fireType: 'regular' }))
               setSaveError(false)
               if (user) {
+                const summaryData = {
+                  fiNumber: result.fiNumber,
+                  fireAge: result.fireAge,
+                  yearsToFire: result.yearsToFire,
+                  progressPercentage: result.progressPercentage,
+                  coastFireNumber: result.coastFireNumber,
+                  isAlreadyFi: result.isAlreadyFi,
+                }
                 try {
-                  const date = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                  await saveSnapshot(
-                    'fire',
-                    `FIRE Plan — ${date}`,
-                    inputs as unknown as Record<string, unknown>,
-                    {
-                      fiNumber: result.fiNumber,
-                      fireAge: result.fireAge,
-                      yearsToFire: result.yearsToFire,
-                      progressPercentage: result.progressPercentage,
-                      coastFireNumber: result.coastFireNumber,
-                      isAlreadyFi: result.isAlreadyFi,
-                    },
-                  )
+                  if (snapshotId) {
+                    await updateSnapshot(snapshotId, {
+                      inputs: inputs as unknown as Record<string, unknown>,
+                      summary: summaryData,
+                    })
+                  } else {
+                    const date = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                    await saveSnapshot('fire', `FIRE Plan — ${date}`, inputs as unknown as Record<string, unknown>, summaryData)
+                  }
                 } catch {
                   setSaveError(true)
                   setTimeout(() => setSaveError(false), 3000)
@@ -841,7 +858,11 @@ export default function FireCalculator() {
             }`}
           >
             {saved ? <CheckCircle size={14} /> : null}
-            {saved ? 'Saved to dashboard' : saveError ? 'Save failed — try again' : 'Save to dashboard'}
+            {saved
+              ? (snapshotId ? 'Updated' : 'Saved to dashboard')
+              : saveError
+              ? 'Save failed — try again'
+              : (snapshotId ? 'Update snapshot' : 'Save to dashboard')}
           </button>
         </div>
 

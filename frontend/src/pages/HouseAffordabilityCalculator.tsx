@@ -1,12 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   AlertCircle, Building2, CheckCircle, CheckCircle2, ChevronDown, ChevronUp,
   Gift, Home, MapPin, PiggyBank, Receipt, Target, Users, XCircle,
   type LucideIcon,
 } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { saveSnapshot } from '../lib/api'
+import { getSnapshot, saveSnapshot, updateSnapshot } from '../lib/api'
 import {
   CartesianGrid, ComposedChart, Line, ReferenceLine,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -250,10 +250,23 @@ function SensitivityTooltip({ active, payload, hasRoommates }: { active?: boolea
 export default function HouseAffordabilityCalculator() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [inputs, setInputs] = useState<HouseAffordabilityInputs>(DEFAULT_INPUTS)
+  const [snapshotId, setSnapshotId] = useState<string | null>(null)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState(false)
+
+  useEffect(() => {
+    const id = searchParams.get('snapshot')
+    if (!id) return
+    getSnapshot(id)
+      .then((snap) => {
+        setInputs(snap.inputs as unknown as HouseAffordabilityInputs)
+        setSnapshotId(snap.id)
+      })
+      .catch(() => { /* fall through to defaults */ })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = <K extends keyof HouseAffordabilityInputs>(k: K, v: HouseAffordabilityInputs[K]) =>
     setInputs((prev) => ({ ...prev, [k]: v }))
@@ -730,22 +743,25 @@ export default function HouseAffordabilityCalculator() {
             onClick={async () => {
               if (!user) { navigate('/auth'); return }
               setSaveError(false)
+              const summaryData = {
+                maxAffordablePrice: result.maxPriceByFrontEnd,
+                maxPriceByBackEnd: result.maxPriceByBackEnd,
+                monthlyPayment: result.monthlyAtMax.totalLenderDTI,
+                downPaymentDollars: result.maxPriceByFrontEnd * (inputs.downPaymentPct / 100),
+                effectiveRate: result.effectiveRate,
+                state: inputs.state,
+                filingStatus: inputs.filingStatus,
+              }
               try {
-                const date = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                await saveSnapshot(
-                  'house_affordability',
-                  `House Affordability — ${date}`,
-                  inputs as unknown as Record<string, unknown>,
-                  {
-                    maxAffordablePrice: result.maxPriceByFrontEnd,
-                    maxPriceByBackEnd: result.maxPriceByBackEnd,
-                    monthlyPayment: result.monthlyAtMax.totalLenderDTI,
-                    downPaymentDollars: result.maxPriceByFrontEnd * (inputs.downPaymentPct / 100),
-                    effectiveRate: result.effectiveRate,
-                    state: inputs.state,
-                    filingStatus: inputs.filingStatus,
-                  },
-                )
+                if (snapshotId) {
+                  await updateSnapshot(snapshotId, {
+                    inputs: inputs as unknown as Record<string, unknown>,
+                    summary: summaryData,
+                  })
+                } else {
+                  const date = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                  await saveSnapshot('house_affordability', `House Affordability — ${date}`, inputs as unknown as Record<string, unknown>, summaryData)
+                }
                 setSaved(true)
                 setTimeout(() => setSaved(false), 3000)
               } catch {
@@ -758,7 +774,11 @@ export default function HouseAffordabilityCalculator() {
             }`}
           >
             {saved ? <CheckCircle size={14} /> : null}
-            {saved ? 'Saved to dashboard' : saveError ? 'Save failed — try again' : 'Save to dashboard'}
+            {saved
+              ? (snapshotId ? 'Updated' : 'Saved to dashboard')
+              : saveError
+              ? 'Save failed — try again'
+              : (snapshotId ? 'Update snapshot' : 'Save to dashboard')}
           </button>
         </div>
 

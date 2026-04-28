@@ -1,9 +1,9 @@
 import {
-  ArrowRight, Briefcase, Calculator, Flame, Home, Target, Trash2,
+  ArrowRight, Briefcase, Calculator, Flame, Home, Pencil, Target, Trash2,
   TrendingUp, Waves, Zap,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import StatCard from '../components/StatCard'
 import { useAuth } from '../hooks/useAuth'
 import { deleteSnapshot, getSnapshots } from '../lib/api'
@@ -47,7 +47,15 @@ const tools = [
   },
 ]
 
+const SNAPSHOT_ROUTES: Record<string, string> = {
+  fire: '/app/calculator',
+  rent_buy: '/app/rent-vs-buy',
+  house_affordability: '/app/house-affordability',
+  offer: '/app/offer',
+}
+
 function SnapshotCard({ snapshot, onDelete }: { snapshot: Snapshot; onDelete: () => void }) {
+  const navigate = useNavigate()
   const [deleting, setDeleting] = useState(false)
 
   const handleDelete = async () => {
@@ -58,6 +66,11 @@ function SnapshotCard({ snapshot, onDelete }: { snapshot: Snapshot; onDelete: ()
     } catch {
       setDeleting(false)
     }
+  }
+
+  const handleEdit = () => {
+    const route = SNAPSHOT_ROUTES[snapshot.calculator_type]
+    if (route) navigate(`${route}?snapshot=${snapshot.id}`)
   }
 
   const date = new Date(snapshot.created_at).toLocaleDateString('en-US', {
@@ -165,14 +178,23 @@ function SnapshotCard({ snapshot, onDelete }: { snapshot: Snapshot; onDelete: ()
             <p className="text-xs text-slate-400">{typeLabel[snapshot.calculator_type]} · {date}</p>
           </div>
         </div>
-        <button
-          onClick={handleDelete}
-          disabled={deleting}
-          className="p-1 rounded text-slate-300 hover:text-red-400 transition-colors flex-shrink-0"
-          aria-label="Delete snapshot"
-        >
-          <Trash2 size={13} />
-        </button>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button
+            onClick={handleEdit}
+            className="p-1 rounded text-slate-300 hover:text-slate-600 transition-colors"
+            aria-label="Edit snapshot"
+          >
+            <Pencil size={13} />
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="p-1 rounded text-slate-300 hover:text-red-400 transition-colors"
+            aria-label="Delete snapshot"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
       </div>
       {renderSummary()}
     </div>

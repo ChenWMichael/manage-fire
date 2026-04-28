@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 
@@ -16,3 +16,9 @@ class SnapshotCreate(BaseModel):
     calculator_type: CalculatorType
     inputs: Dict[str, Any]
     summary: Dict[str, Any]
+
+
+class SnapshotUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    inputs: Optional[Dict[str, Any]] = None
+    summary: Optional[Dict[str, Any]] = None

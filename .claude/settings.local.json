@@ -4,7 +4,10 @@
       "Bash(npm install *)",
       "Bash(timeout 8 npm run dev)",
       "Bash(npx tsc *)",
-      "Bash(npx vite *)"
+      "Bash(npx vite *)",
+      "Bash(pip install *)",
+      "Bash(python -m pytest tests/ -v)",
+      "Bash(npx vitest *)"
     ]
   }
 }

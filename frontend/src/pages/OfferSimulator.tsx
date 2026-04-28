@@ -1,105 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Briefcase, CheckCircle, Plus, Trash2 } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { saveSnapshot } from '../lib/api'
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type FilingStatus = 'single' | 'married'
-type RsuSchedule = '4yr-equal' | '4yr-backloaded' | '3yr-equal' | '2yr-equal' | '1yr-cliff'
-
-interface Offer {
-  id: string
-  label: string
-  title: string
-  state: string
-  baseSalary: number
-  annualBonusPct: number
-  signingBonus: number
-  rsuTotalGrant: number
-  rsuSchedule: RsuSchedule
-  k401Pct: number
-}
-
-interface YearBreakdown {
-  year: number
-  grossBase: number
-  grossBonus: number
-  grossSigning: number
-  grossRsu: number
-  k401: number
-  grossTotal: number
-  federalTax: number
-  stateTax: number
-  ficaTax: number
-  totalTax: number
-  netIncome: number
-  effectiveTaxRate: number
-}
-
-// ─── Tax constants ─────────────────────────────────────────────────────────────
-
-type Bracket = [number, number] // [upTo, rate]
-
-const FED_SINGLE: Bracket[] = [
-  [11_925, 0.10], [48_475, 0.12], [103_350, 0.22],
-  [197_300, 0.24], [250_525, 0.32], [626_350, 0.35], [Infinity, 0.37],
-]
-const FED_MARRIED: Bracket[] = [
-  [23_850, 0.10], [96_950, 0.12], [206_700, 0.22],
-  [394_600, 0.24], [501_050, 0.32], [751_600, 0.35], [Infinity, 0.37],
-]
-const STD_DEDUCTION = { single: 15_000, married: 30_000 }
-const SS_WAGE_BASE = 176_100
-const K401_LIMIT = 23_500
-
-const STATE_BRACKETS: Record<string, Bracket[]> = {
-  AK: [], FL: [], NV: [], SD: [], TX: [], WA: [], WY: [],
-  AZ: [[Infinity, 0.025]],
-  CO: [[Infinity, 0.044]],
-  GA: [[Infinity, 0.0549]],
-  IL: [[Infinity, 0.0495]],
-  MA: [[Infinity, 0.05]],
-  MI: [[Infinity, 0.0425]],
-  NC: [[Infinity, 0.0475]],
-  PA: [[Infinity, 0.0307]],
-  UT: [[Infinity, 0.0465]],
-  CA: [
-    [10_412, 0.01], [24_684, 0.02], [38_959, 0.04], [54_081, 0.06],
-    [68_350, 0.08], [349_137, 0.093], [418_961, 0.103], [698_274, 0.113],
-    [Infinity, 0.123],
-  ],
-  CT: [
-    [10_000, 0.02], [50_000, 0.045], [100_000, 0.055],
-    [200_000, 0.06], [250_000, 0.065], [500_000, 0.069], [Infinity, 0.0699],
-  ],
-  MD: [
-    [1_000, 0.02], [2_000, 0.03], [3_000, 0.04], [100_000, 0.0475],
-    [125_000, 0.05], [150_000, 0.0525], [250_000, 0.055], [Infinity, 0.0575],
-  ],
-  MN: [
-    [31_690, 0.0535], [104_090, 0.068], [193_240, 0.0785], [Infinity, 0.0985],
-  ],
-  NJ: [
-    [20_000, 0.014], [35_000, 0.0175], [40_000, 0.035],
-    [75_000, 0.05525], [500_000, 0.0637], [1_000_000, 0.0897], [Infinity, 0.1075],
-  ],
-  NY: [
-    [17_150, 0.04], [23_600, 0.045], [27_900, 0.0525],
-    [161_550, 0.0585], [323_200, 0.0625], [2_155_350, 0.0685], [Infinity, 0.0965],
-  ],
-  OH: [[26_050, 0], [100_000, 0.0275], [Infinity, 0.035]],
-  OR: [
-    [18_400, 0.0475], [46_200, 0.0675], [250_000, 0.0875], [Infinity, 0.099],
-  ],
-  VA: [
-    [3_000, 0.02], [5_000, 0.03], [17_000, 0.05], [Infinity, 0.0575],
-  ],
-  WI: [
-    [14_320, 0.035], [28_640, 0.044], [315_310, 0.053], [Infinity, 0.0765],
-  ],
-}
+import { getSnapshot, saveSnapshot, updateSnapshot } from '../lib/api'
+import {
+  type FilingStatus,
+  type RsuSchedule,
+  type Offer,
+  type YearBreakdown,
+  calcYear,
+} from '../utils/offerSimulatorCalculations'
 
 const STATES: { code: string; name: string }[] = [
   { code: 'AK', name: 'Alaska (no tax)' },
@@ -149,70 +59,6 @@ const OFFER_COLORS = [
 const genId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
 const fmt = (n: number) => '$' + Math.round(n).toLocaleString('en-US')
 const pct = (n: number) => (n * 100).toFixed(1) + '%'
-
-function applyBrackets(income: number, brackets: Bracket[]): number {
-  if (income <= 0 || brackets.length === 0) return 0
-  let tax = 0, prev = 0
-  for (const [upTo, rate] of brackets) {
-    if (income <= prev) break
-    tax += (Math.min(income, upTo) - prev) * rate
-    prev = upTo
-  }
-  return tax
-}
-
-function calcFederalTax(taxable: number, status: FilingStatus): number {
-  return applyBrackets(Math.max(0, taxable), status === 'single' ? FED_SINGLE : FED_MARRIED)
-}
-
-function calcStateTax(income: number, state: string): number {
-  return applyBrackets(Math.max(0, income), STATE_BRACKETS[state] ?? [])
-}
-
-function calcFica(gross: number): number {
-  const ss = Math.min(gross, SS_WAGE_BASE) * 0.062
-  const med = gross * 0.0145 + Math.max(0, gross - 200_000) * 0.009
-  return ss + med
-}
-
-function rsuVest(total: number, schedule: RsuSchedule, year: 1 | 2 | 3 | 4): number {
-  if (total === 0) return 0
-  const table: Record<RsuSchedule, number[]> = {
-    '4yr-equal':      [0.25, 0.25, 0.25, 0.25],
-    '4yr-backloaded': [0.05, 0.15, 0.40, 0.40],
-    '3yr-equal':      [1/3,  1/3,  1/3,  0],
-    '2yr-equal':      [0.5,  0.5,  0,    0],
-    '1yr-cliff':      [1.0,  0,    0,    0],
-  }
-  return total * (table[schedule][year - 1] ?? 0)
-}
-
-function calcYear(offer: Offer, year: 1 | 2 | 3 | 4, status: FilingStatus): YearBreakdown {
-  const grossBase = offer.baseSalary
-  const grossBonus = offer.baseSalary * (offer.annualBonusPct / 100)
-  const grossSigning = year === 1 ? offer.signingBonus : 0
-  const grossRsu = rsuVest(offer.rsuTotalGrant, offer.rsuSchedule, year)
-  const grossTotal = grossBase + grossBonus + grossSigning + grossRsu
-
-  const k401 = Math.min(offer.baseSalary * (offer.k401Pct / 100), K401_LIMIT)
-  const deduction = STD_DEDUCTION[status]
-
-  const federalTaxable = Math.max(0, grossTotal - k401 - deduction)
-  const stateTaxable = Math.max(0, grossTotal - k401)
-
-  const federalTax = calcFederalTax(federalTaxable, status)
-  const stateTax = calcStateTax(stateTaxable, offer.state)
-  const ficaTax = calcFica(grossTotal)
-  const totalTax = federalTax + stateTax + ficaTax
-
-  const netIncome = grossTotal - k401 - totalTax
-  const effectiveTaxRate = grossTotal > 0 ? totalTax / grossTotal : 0
-
-  return {
-    year, grossBase, grossBonus, grossSigning, grossRsu, k401,
-    grossTotal, federalTax, stateTax, ficaTax, totalTax, netIncome, effectiveTaxRate,
-  }
-}
 
 const DEFAULT_OFFER = (): Offer => ({
   id: genId(),
@@ -491,11 +337,29 @@ function YearTable({
 export default function OfferSimulator() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [offers, setOffers] = useState<Offer[]>([DEFAULT_OFFER()])
   const [filingStatus, setFilingStatus] = useState<FilingStatus>('single')
+  const [snapshotId, setSnapshotId] = useState<string | null>(null)
   const [selectedYear, setSelectedYear] = useState<1 | 2 | 3 | 4>(1)
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState(false)
+
+  useEffect(() => {
+    const id = searchParams.get('snapshot')
+    if (!id) return
+    getSnapshot(id)
+      .then((snap) => {
+        const { offers: loadedOffers, filingStatus: loadedFiling } = snap.inputs as unknown as {
+          offers: Offer[]
+          filingStatus: FilingStatus
+        }
+        if (loadedOffers) setOffers(loadedOffers)
+        if (loadedFiling) setFilingStatus(loadedFiling)
+        setSnapshotId(snap.id)
+      })
+      .catch(() => { /* fall through to defaults */ })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const addOffer = () => {
     if (offers.length < 3) setOffers(prev => [...prev, DEFAULT_OFFER()])
@@ -607,33 +471,40 @@ export default function OfferSimulator() {
           onClick={async () => {
             if (!user) { navigate('/auth'); return }
             setSaveError(false)
+            const fourYearTotals = offers.map((o) => ({
+              label: o.label,
+              totalNet: ([1, 2, 3, 4] as const).reduce((sum, y) => sum + calcYear(o, y, filingStatus).netIncome, 0),
+              totalGross: ([1, 2, 3, 4] as const).reduce((sum, y) => sum + calcYear(o, y, filingStatus).grossTotal, 0),
+            }))
+            const summaryData = { fourYearTotals, offerCount: offers.length, filingStatus }
             try {
+              if (snapshotId) {
+                await updateSnapshot(snapshotId, {
+                  inputs: { offers, filingStatus } as unknown as Record<string, unknown>,
+                  summary: summaryData,
+                })
+              } else {
                 const date = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                const fourYearTotals = offers.map((o) => ({
-                  label: o.label,
-                  totalNet: ([1, 2, 3, 4] as const).reduce((sum, y) => sum + calcYear(o, y, filingStatus).netIncome, 0),
-                  totalGross: ([1, 2, 3, 4] as const).reduce((sum, y) => sum + calcYear(o, y, filingStatus).grossTotal, 0),
-                }))
-                await saveSnapshot(
-                  'offer',
-                  `Offer Comparison — ${date}`,
-                  { offers, filingStatus } as unknown as Record<string, unknown>,
-                  { fourYearTotals, offerCount: offers.length, filingStatus },
-                )
-                setSaved(true)
-                setTimeout(() => setSaved(false), 3000)
-              } catch {
-                setSaveError(true)
-                setTimeout(() => setSaveError(false), 3000)
+                await saveSnapshot('offer', `Offer Comparison — ${date}`, { offers, filingStatus } as unknown as Record<string, unknown>, summaryData)
               }
-            }}
+              setSaved(true)
+              setTimeout(() => setSaved(false), 3000)
+            } catch {
+              setSaveError(true)
+              setTimeout(() => setSaveError(false), 3000)
+            }
+          }}
             className={`w-full py-2.5 rounded-lg text-sm font-semibold border transition-all duration-150 flex items-center justify-center gap-2 ${
               saved ? 'bg-slate-100 border-slate-300 text-slate-700' : saveError ? 'bg-red-50 border-red-200 text-red-700' : 'btn-secondary'
             }`}
           >
             {saved ? <CheckCircle size={14} /> : null}
-            {saved ? 'Saved to dashboard' : saveError ? 'Save failed — try again' : 'Save to dashboard'}
-        </button>
+            {saved
+              ? (snapshotId ? 'Updated' : 'Saved to dashboard')
+              : saveError
+              ? 'Save failed — try again'
+              : (snapshotId ? 'Update snapshot' : 'Save to dashboard')}
+          </button>
       </div>
 
       <p className="text-xs text-slate-400 text-center">

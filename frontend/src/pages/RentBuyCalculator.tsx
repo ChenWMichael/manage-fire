@@ -5,11 +5,11 @@ import {
   Home,
   TrendingUp,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import HintTooltip from '../components/HintTooltip'
 import { useAuth } from '../hooks/useAuth'
-import { saveSnapshot } from '../lib/api'
+import { getSnapshot, saveSnapshot, updateSnapshot } from '../lib/api'
 import {
   Area,
   CartesianGrid,
@@ -247,12 +247,25 @@ function YearTable({ data }: { data: ReturnType<typeof calculateRentVsBuy>['year
 export default function RentBuyCalculator() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [inputs, setInputs] = useState<RentBuyInputs>(DEFAULT_INPUTS)
+  const [snapshotId, setSnapshotId] = useState<string | null>(null)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [showTable, setShowTable] = useState(false)
   const [chartView, setChartView] = useState<'networth' | 'monthly'>('networth')
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState(false)
+
+  useEffect(() => {
+    const id = searchParams.get('snapshot')
+    if (!id) return
+    getSnapshot(id)
+      .then((snap) => {
+        setInputs(snap.inputs as unknown as RentBuyInputs)
+        setSnapshotId(snap.id)
+      })
+      .catch(() => { /* fall through to defaults */ })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = <K extends keyof RentBuyInputs>(key: K, value: RentBuyInputs[K]) =>
     setInputs((prev) => ({ ...prev, [key]: value }))
@@ -631,23 +644,26 @@ export default function RentBuyCalculator() {
             onClick={async () => {
               if (!user) { navigate('/auth'); return }
               setSaveError(false)
+              const summaryData = {
+                recommendation,
+                breakEvenYear,
+                buyFinalNetWorth,
+                rentFinalNetWorth,
+                netWorthDifference: result.netWorthDifference,
+                homePrice: inputs.homePrice,
+                monthlyRent: inputs.monthlyRent,
+                state: inputs.state,
+              }
               try {
-                const date = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                await saveSnapshot(
-                  'rent_buy',
-                  `Rent vs. Buy — ${date}`,
-                  inputs as unknown as Record<string, unknown>,
-                  {
-                    recommendation,
-                    breakEvenYear,
-                    buyFinalNetWorth,
-                    rentFinalNetWorth,
-                    netWorthDifference: result.netWorthDifference,
-                    homePrice: inputs.homePrice,
-                    monthlyRent: inputs.monthlyRent,
-                    state: inputs.state,
-                  },
-                )
+                if (snapshotId) {
+                  await updateSnapshot(snapshotId, {
+                    inputs: inputs as unknown as Record<string, unknown>,
+                    summary: summaryData,
+                  })
+                } else {
+                  const date = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                  await saveSnapshot('rent_buy', `Rent vs. Buy — ${date}`, inputs as unknown as Record<string, unknown>, summaryData)
+                }
                 setSaved(true)
                 setTimeout(() => setSaved(false), 3000)
               } catch {
@@ -660,7 +676,11 @@ export default function RentBuyCalculator() {
             }`}
           >
             {saved ? <CheckCircle size={14} /> : null}
-            {saved ? 'Saved to dashboard' : saveError ? 'Save failed — try again' : 'Save to dashboard'}
+            {saved
+              ? (snapshotId ? 'Updated' : 'Saved to dashboard')
+              : saveError
+              ? 'Save failed — try again'
+              : (snapshotId ? 'Update snapshot' : 'Save to dashboard')}
           </button>
         </div>
 
