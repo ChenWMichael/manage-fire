@@ -1,6 +1,8 @@
 import { CheckCircle, Loader2, Save, User } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
+import { getProfile, updateProfile } from '../lib/api'
+import { supabase } from '../lib/supabase'
 import { FIRE_TYPE_META } from '../types'
 import type { FireType } from '../types'
 
@@ -10,29 +12,37 @@ export default function Profile() {
   const [fireType, setFireType] = useState<FireType>('regular')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    if (user) {
-      setFullName(user.user_metadata?.full_name || '')
-    }
-    const stored = localStorage.getItem('mf_last_result')
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored)
-        if (parsed.fireType) setFireType(parsed.fireType)
-      } catch {
-        /* ignore */
-      }
-    }
+    if (user) setFullName(user.user_metadata?.full_name || '')
   }, [user])
+
+  useEffect(() => {
+    getProfile()
+      .then((profile) => {
+        if (profile.fire_type) setFireType(profile.fire_type as FireType)
+        if (profile.full_name) setFullName(profile.full_name)
+      })
+      .catch(() => { /* fall through to auth metadata defaults */ })
+  }, [])
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError('')
     setSaving(true)
-    await new Promise((r) => setTimeout(r, 600))
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
+    try {
+      await Promise.all([
+        updateProfile({ full_name: fullName, fire_type: fireType }),
+        supabase.auth.updateUser({ data: { full_name: fullName } }),
+      ])
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } catch {
+      setError('Failed to save changes. Please try again.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -61,8 +71,9 @@ export default function Profile() {
         <div className="card p-6 space-y-4">
           <h2 className="text-base font-semibold text-slate-900">Personal Information</h2>
           <div>
-            <label className="label">Display name</label>
+            <label htmlFor="profile-name" className="label">Display name</label>
             <input
+              id="profile-name"
               className="input"
               type="text"
               placeholder="Your name"
@@ -71,8 +82,9 @@ export default function Profile() {
             />
           </div>
           <div>
-            <label className="label">Email</label>
+            <label htmlFor="profile-email" className="label">Email</label>
             <input
+              id="profile-email"
               className="input bg-slate-50 cursor-not-allowed"
               type="email"
               value={user?.email || ''}
@@ -103,6 +115,12 @@ export default function Profile() {
             ))}
           </div>
         </div>
+
+        {error && (
+          <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            {error}
+          </div>
+        )}
 
         <button
           type="submit"

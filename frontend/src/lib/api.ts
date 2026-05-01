@@ -24,6 +24,8 @@ export interface Snapshot {
   updated_at: string
 }
 
+export const SNAPSHOT_LIMIT = 20
+
 export async function saveSnapshot(
   calculator_type: CalculatorType,
   name: string,
@@ -36,7 +38,10 @@ export async function saveSnapshot(
     headers,
     body: JSON.stringify({ calculator_type, name, inputs, summary }),
   })
-  if (!res.ok) throw new Error('Failed to save snapshot')
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { detail?: string }
+    throw new Error(body.detail ?? 'Failed to save snapshot')
+  }
   return res.json() as Promise<Snapshot>
 }
 
@@ -47,6 +52,27 @@ export async function getSnapshots(): Promise<Snapshot[]> {
   return res.json() as Promise<Snapshot[]>
 }
 
+export async function getSnapshot(id: string): Promise<Snapshot> {
+  const headers = await authHeaders()
+  const res = await fetch(`${API_BASE}/snapshots/${id}`, { headers })
+  if (!res.ok) throw new Error('Failed to fetch snapshot')
+  return res.json() as Promise<Snapshot>
+}
+
+export async function updateSnapshot(
+  id: string,
+  data: Partial<Pick<Snapshot, 'name' | 'inputs' | 'summary'>>,
+): Promise<Snapshot> {
+  const headers = await authHeaders()
+  const res = await fetch(`${API_BASE}/snapshots/${id}`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) throw new Error('Failed to update snapshot')
+  return res.json() as Promise<Snapshot>
+}
+
 export async function deleteSnapshot(id: string): Promise<void> {
   const headers = await authHeaders()
   const res = await fetch(`${API_BASE}/snapshots/${id}`, {
@@ -54,4 +80,40 @@ export async function deleteSnapshot(id: string): Promise<void> {
     headers,
   })
   if (!res.ok) throw new Error('Failed to delete snapshot')
+}
+
+export async function deleteSnapshots(ids: string[]): Promise<void> {
+  const headers = await authHeaders()
+  const res = await fetch(`${API_BASE}/snapshots`, {
+    method: 'DELETE',
+    headers,
+    body: JSON.stringify({ ids }),
+  })
+  if (!res.ok) throw new Error('Failed to delete snapshots')
+}
+
+export interface Profile {
+  id: string
+  full_name: string | null
+  fire_type: string | null
+  created_at: string
+  updated_at: string
+}
+
+export async function getProfile(): Promise<Profile> {
+  const headers = await authHeaders()
+  const res = await fetch(`${API_BASE}/profile/me`, { headers })
+  if (!res.ok) throw new Error('Failed to fetch profile')
+  return res.json() as Promise<Profile>
+}
+
+export async function updateProfile(data: { full_name?: string; fire_type?: string }): Promise<Profile> {
+  const headers = await authHeaders()
+  const res = await fetch(`${API_BASE}/profile/me`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) throw new Error('Failed to update profile')
+  return res.json() as Promise<Profile>
 }

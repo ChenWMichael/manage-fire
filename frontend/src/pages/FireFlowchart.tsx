@@ -1,4 +1,5 @@
-import { useState, Fragment } from 'react'
+import { Fragment } from 'react'
+import { useLocalStorage } from '../hooks/useLocalStorage'
 import { CheckCircle2, Circle, GitBranch, HelpCircle, ChevronDown, ChevronRight, List, RotateCcw } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -975,10 +976,23 @@ function FlowchartDecisionFork({
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function FireFlowchart() {
-  const [decisions, setDecisions] = useState<Record<string, number>>({})
-  const [tasksDone, setTasksDone] = useState<Record<string, Set<string>>>({})
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const [view, setView] = useState<'steps' | 'chart'>('steps')
+  const [decisions, setDecisions] = useLocalStorage<Record<string, number>>('mf-flowchart-decisions', {})
+  const [tasksDone, setTasksDone] = useLocalStorage<Record<string, Set<string>>>(
+    'mf-flowchart-tasks',
+    {},
+    (v) => JSON.stringify(Object.fromEntries(Object.entries(v).map(([k, s]) => [k, [...s]]))),
+    (raw) => {
+      const parsed = JSON.parse(raw) as Record<string, string[]>
+      return Object.fromEntries(Object.entries(parsed).map(([k, arr]) => [k, new Set(arr)]))
+    },
+  )
+  const [expanded, setExpanded] = useLocalStorage<Set<string>>(
+    'mf-flowchart-expanded',
+    new Set(),
+    (v) => JSON.stringify([...v]),
+    (raw) => new Set(JSON.parse(raw) as string[]),
+  )
+  const [view, setView] = useLocalStorage<'steps' | 'chart'>('mf-flowchart-view', 'steps')
 
   const makeDecision = (decisionId: string, branchIdx: number) => {
     if (branchIdx === -1) {

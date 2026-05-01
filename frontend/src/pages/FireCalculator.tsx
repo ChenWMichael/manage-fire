@@ -1,8 +1,10 @@
-import { CheckCircle, ChevronDown, Home, Info, Plus, Trash2, TrendingUp, Wallet, Zap } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { CheckCircle, ChevronDown, Home, Info, Loader2, Plus, Trash2, TrendingUp, Wallet, Zap } from 'lucide-react'
+import { useEffect, useId, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import HintTooltip from '../components/HintTooltip'
 import { useAuth } from '../hooks/useAuth'
-import { saveSnapshot } from '../lib/api'
+import { useLocalStorage } from '../hooks/useLocalStorage'
+import { getSnapshot, saveSnapshot, updateSnapshot } from '../lib/api'
 import {
   Area,
   CartesianGrid,
@@ -65,15 +67,17 @@ function Field({
   prefix?: string; suffix?: string; min?: number; max?: number
   step?: number; hint?: string; small?: boolean
 }) {
+  const id = useId()
   return (
     <div>
-      <label className="flex items-center gap-1 text-sm font-medium text-slate-700 mb-1">
+      <label htmlFor={id} className="flex items-center gap-1 text-sm font-medium text-slate-700 mb-1">
         {label}
         {hint && <HintTooltip hint={hint} />}
       </label>
       <div className="relative">
         {prefix && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm select-none">{prefix}</span>}
         <input
+          id={id}
           type="number"
           className={`input ${prefix ? 'pl-7' : ''} ${suffix ? 'pr-10' : ''} ${small ? 'py-1.5 text-sm' : ''}`}
           value={value} min={min} max={max} step={step}
@@ -146,7 +150,7 @@ function HomePurchaseForm({ event, onChange, onDelete }: {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Home size={14} className="text-slate-500" />
-          <input className="text-sm font-semibold text-slate-800 bg-transparent border-none outline-none w-40"
+          <input aria-label="Home purchase event name" className="text-sm font-semibold text-slate-800 bg-transparent border-none outline-none w-40"
             value={event.label} onChange={(e) => upd('label', e.target.value)} />
         </div>
         <button onClick={onDelete} className="text-slate-400 hover:text-red-400 transition-colors">
@@ -179,7 +183,7 @@ function WindfallForm({ event, onChange, onDelete }: {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Zap size={14} className="text-slate-500" />
-          <input className="text-sm font-semibold text-slate-800 bg-transparent border-none outline-none w-40"
+          <input aria-label="Windfall event name" className="text-sm font-semibold text-slate-800 bg-transparent border-none outline-none w-40"
             value={event.label} onChange={(e) => upd('label', e.target.value)} />
         </div>
         <button onClick={onDelete} className="text-slate-400 hover:text-red-400 transition-colors">
@@ -207,7 +211,7 @@ function ContributionChangeForm({ event, onChange, onDelete }: {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Wallet size={14} className="text-slate-500" />
-          <input className="text-sm font-semibold text-slate-800 bg-transparent border-none outline-none w-44"
+          <input aria-label="Contribution change event name" className="text-sm font-semibold text-slate-800 bg-transparent border-none outline-none w-44"
             value={event.label} onChange={(e) => upd('label', e.target.value)} />
         </div>
         <button onClick={onDelete} className="text-slate-400 hover:text-red-400 transition-colors">
@@ -237,7 +241,7 @@ function ReturnChangeForm({ event, onChange, onDelete }: {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <TrendingUp size={14} className="text-slate-500" />
-          <input className="text-sm font-semibold text-slate-800 bg-transparent border-none outline-none w-44"
+          <input aria-label="Return change event name" className="text-sm font-semibold text-slate-800 bg-transparent border-none outline-none w-44"
             value={event.label} onChange={(e) => upd('label', e.target.value)} />
         </div>
         <button onClick={onDelete} className="text-slate-400 hover:text-red-400 transition-colors">
@@ -289,6 +293,7 @@ function AccountForm({ account, onChange, onDelete }: {
   onDelete: () => void
 }) {
   const upd = <K extends keyof Account>(k: K, v: Account[K]) => onChange({ ...account, [k]: v })
+  const id = useId()
 
   const perYear =
     account.contributionFrequency === 'monthly' ? account.contributionAmount * 12
@@ -309,6 +314,8 @@ function AccountForm({ account, onChange, onDelete }: {
           {TAX_LABELS[account.taxType]}
         </button>
         <input
+          id={`${id}-name`}
+          aria-label="Account name"
           className="flex-1 text-sm font-semibold text-slate-800 bg-transparent border-none outline-none min-w-0"
           value={account.name}
           onChange={(e) => upd('name', e.target.value)}
@@ -324,8 +331,8 @@ function AccountForm({ account, onChange, onDelete }: {
         <Field small label="Contribution" value={account.contributionAmount}
           onChange={(v) => upd('contributionAmount', v)} prefix="$" step={50} />
         <div>
-          <label className="text-sm font-medium text-slate-700 mb-1 block">Frequency</label>
-          <select className="input py-1.5 text-sm" value={account.contributionFrequency}
+          <label htmlFor={`${id}-freq`} className="text-sm font-medium text-slate-700 mb-1 block">Frequency</label>
+          <select id={`${id}-freq`} className="input py-1.5 text-sm" value={account.contributionFrequency}
             onChange={(e) => upd('contributionFrequency', e.target.value as ContributionFrequency)}>
             <option value="monthly">Monthly (12/yr)</option>
             <option value="semi-monthly">Semi-monthly (24/yr)</option>
@@ -333,19 +340,20 @@ function AccountForm({ account, onChange, onDelete }: {
           </select>
         </div>
         <div>
-          <label className="flex items-center justify-between text-sm font-medium text-slate-700 mb-1">
+          <div className="flex items-center justify-between text-sm font-medium text-slate-700 mb-1">
             Annual Cap
             <button
               onClick={() => upd('annualCap', account.annualCap !== null ? null : 23_500)}
+              aria-label={account.annualCap !== null ? 'Disable annual cap' : 'Enable annual cap'}
               className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${account.annualCap !== null ? 'bg-fire-500' : 'bg-slate-200'}`}
             >
               <span className={`inline-block h-3 w-3 rounded-full bg-white shadow transition-transform ${account.annualCap !== null ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
             </button>
-          </label>
+          </div>
           {account.annualCap !== null ? (
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
-              <input type="number" className="input pl-7 py-1.5 text-sm"
+              <input aria-label="Annual cap" type="number" className="input pl-7 py-1.5 text-sm"
                 value={account.annualCap} min={0} step={500}
                 onChange={(e) => upd('annualCap', Number(e.target.value))} />
             </div>
@@ -536,13 +544,28 @@ function ProjectionTable({ result, withdrawalRate, annualExpenses, retirementAge
 
 export default function FireCalculator() {
   const { user } = useAuth()
-  const [inputs, setInputs] = useState<FireInputs>(DEFAULT_INPUTS)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [inputs, setInputs] = useLocalStorage<FireInputs>('mf-fire-inputs', DEFAULT_INPUTS)
+  const [snapshotId, setSnapshotId] = useState<string | null>(null)
+  const [snapshotLoading, setSnapshotLoading] = useState(() => !!searchParams.get('snapshot'))
   const [saved, setSaved] = useState(false)
-  const [saveError, setSaveError] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [showTable, setShowTable] = useState(false)
   const [nominal, setNominal] = useState(false)
   const [inflationRate, setInflationRate] = useState(3)
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const id = searchParams.get('snapshot')
+    if (!id) return
+    getSnapshot(id)
+      .then((snap) => {
+        setInputs(snap.inputs as unknown as FireInputs)
+        setSnapshotId(snap.id)
+      })
+      .catch(() => setSearchParams({}, { replace: true }))
+      .finally(() => setSnapshotLoading(false))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = <K extends keyof FireInputs>(key: K, value: FireInputs[K]) => {
     setInputs((prev) => ({ ...prev, [key]: value }))
@@ -645,6 +668,14 @@ export default function FireCalculator() {
       : result.fiNumber
     return Math.max(maxData, fiTarget) * 1.3
   }, [chartData, result.fiNumber, nominal, inflationRate, inputs.retirementAge, inputs.currentAge])
+
+  if (snapshotLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 size={28} className="animate-spin text-fire-500" />
+      </div>
+    )
+  }
 
   const totalBalance = inputs.accounts.reduce((s, a) => s + a.currentBalance, 0)
   const totalMonthly = inputs.accounts.reduce((s, a) => s + accountEffectiveMonthly(a), 0)
@@ -810,26 +841,29 @@ export default function FireCalculator() {
           <button
             onClick={async () => {
               localStorage.setItem('mf_last_result', JSON.stringify({ result, fireType: 'regular' }))
-              setSaveError(false)
+              setSaveError(null)
               if (user) {
+                const summaryData = {
+                  fiNumber: result.fiNumber,
+                  fireAge: result.fireAge,
+                  yearsToFire: result.yearsToFire,
+                  progressPercentage: result.progressPercentage,
+                  coastFireNumber: result.coastFireNumber,
+                  isAlreadyFi: result.isAlreadyFi,
+                }
                 try {
-                  const date = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                  await saveSnapshot(
-                    'fire',
-                    `FIRE Plan — ${date}`,
-                    inputs as unknown as Record<string, unknown>,
-                    {
-                      fiNumber: result.fiNumber,
-                      fireAge: result.fireAge,
-                      yearsToFire: result.yearsToFire,
-                      progressPercentage: result.progressPercentage,
-                      coastFireNumber: result.coastFireNumber,
-                      isAlreadyFi: result.isAlreadyFi,
-                    },
-                  )
-                } catch {
-                  setSaveError(true)
-                  setTimeout(() => setSaveError(false), 3000)
+                  if (snapshotId) {
+                    await updateSnapshot(snapshotId, {
+                      inputs: inputs as unknown as Record<string, unknown>,
+                      summary: summaryData,
+                    })
+                  } else {
+                    const date = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                    await saveSnapshot('fire', `FIRE Plan — ${date}`, inputs as unknown as Record<string, unknown>, summaryData)
+                  }
+                } catch (err) {
+                  setSaveError(err instanceof Error ? err.message : 'Save failed — try again')
+                  setTimeout(() => setSaveError(null), 5000)
                   return
                 }
               }
@@ -841,8 +875,14 @@ export default function FireCalculator() {
             }`}
           >
             {saved ? <CheckCircle size={14} /> : null}
-            {saved ? 'Saved to dashboard' : saveError ? 'Save failed — try again' : 'Save to dashboard'}
+            {saved
+              ? (snapshotId ? 'Updated' : 'Saved to dashboard')
+              : saveError ? 'Save failed'
+              : (snapshotId ? 'Update snapshot' : 'Save to dashboard')}
           </button>
+          {saveError && (
+            <p className="text-xs text-red-600 mt-1.5 text-center">{saveError}</p>
+          )}
         </div>
 
         {/* ── RIGHT: Results ────────────────────────────────────────────── */}
@@ -880,6 +920,7 @@ export default function FireCalculator() {
                   <div className="flex items-center gap-1 text-xs text-slate-500">
                     <span>Inflation</span>
                     <input
+                      aria-label="Inflation rate"
                       type="number" value={inflationRate} min={0} max={20} step={0.5}
                       onChange={(e) => setInflationRate(Number(e.target.value))}
                       className="w-12 text-xs text-center border border-slate-200 rounded px-1 py-0.5 bg-white"

@@ -122,6 +122,10 @@ create policy "Users can insert own snapshots"
   on public.calculator_snapshots for insert
   with check (auth.uid() = user_id);
 
+create policy "Users can update own snapshots"
+  on public.calculator_snapshots for update
+  using (auth.uid() = user_id);
+
 create policy "Users can delete own snapshots"
   on public.calculator_snapshots for delete
   using (auth.uid() = user_id);
