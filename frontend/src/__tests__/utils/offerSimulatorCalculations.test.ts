@@ -11,9 +11,12 @@ import {
   calcFica,
   rsuVest,
   calcYear,
+  k401AnnualLimit,
   FED_SINGLE,
   SS_WAGE_BASE,
-  K401_LIMIT,
+  K401_BASE,
+  K401_CATCHUP_50,
+  K401_CATCHUP_60,
   type Offer,
 } from '../../utils/offerSimulatorCalculations'
 
@@ -192,50 +195,86 @@ function makeOffer(overrides: Partial<Offer> = {}): Offer {
   }
 }
 
+describe('k401AnnualLimit', () => {
+  it('returns base limit for age under 50', () => {
+    expect(k401AnnualLimit(30)).toBe(K401_BASE)
+    expect(k401AnnualLimit(49)).toBe(K401_BASE)
+  })
+
+  it('returns base + catch-up for age 50-59', () => {
+    expect(k401AnnualLimit(50)).toBe(K401_BASE + K401_CATCHUP_50)
+    expect(k401AnnualLimit(59)).toBe(K401_BASE + K401_CATCHUP_50)
+  })
+
+  it('returns base + super catch-up for age 60-63 (SECURE 2.0)', () => {
+    expect(k401AnnualLimit(60)).toBe(K401_BASE + K401_CATCHUP_60)
+    expect(k401AnnualLimit(63)).toBe(K401_BASE + K401_CATCHUP_60)
+  })
+
+  it('returns base + regular catch-up for age 64+', () => {
+    expect(k401AnnualLimit(64)).toBe(K401_BASE + K401_CATCHUP_50)
+    expect(k401AnnualLimit(70)).toBe(K401_BASE + K401_CATCHUP_50)
+  })
+
+  it('super catch-up is larger than regular catch-up', () => {
+    expect(K401_CATCHUP_60).toBeGreaterThan(K401_CATCHUP_50)
+  })
+})
+
 describe('calcYear', () => {
   it('grossBase equals base salary', () => {
-    const r = calcYear(makeOffer(), 1, 'single')
+    const r = calcYear(makeOffer(), 1, 'single', 30)
     expect(r.grossBase).toBe(120_000)
   })
 
   it('year 1 includes signing bonus', () => {
-    const r = calcYear(makeOffer({ signingBonus: 20_000 }), 1, 'single')
+    const r = calcYear(makeOffer({ signingBonus: 20_000 }), 1, 'single', 30)
     expect(r.grossSigning).toBe(20_000)
   })
 
   it('year 2+ does not include signing bonus', () => {
-    const r = calcYear(makeOffer({ signingBonus: 20_000 }), 2, 'single')
+    const r = calcYear(makeOffer({ signingBonus: 20_000 }), 2, 'single', 30)
     expect(r.grossSigning).toBe(0)
   })
 
-  it('401(k) is capped at K401_LIMIT when contribution exceeds it', () => {
-    // baseSalary 400,000 at 10% = 40,000, but capped at K401_LIMIT (23,500)
-    const r = calcYear(makeOffer({ baseSalary: 400_000, k401Pct: 10 }), 1, 'single')
-    expect(r.k401).toBe(K401_LIMIT)
+  it('401(k) is capped at base limit for age < 50', () => {
+    // baseSalary 400,000 at 10% = 40,000, capped at K401_BASE
+    const r = calcYear(makeOffer({ baseSalary: 400_000, k401Pct: 10 }), 1, 'single', 30)
+    expect(r.k401).toBe(K401_BASE)
+  })
+
+  it('401(k) uses catch-up limit for age 50-59', () => {
+    const r = calcYear(makeOffer({ baseSalary: 400_000, k401Pct: 10 }), 1, 'single', 55)
+    expect(r.k401).toBe(K401_BASE + K401_CATCHUP_50)
+  })
+
+  it('401(k) uses super catch-up limit for age 60-63', () => {
+    const r = calcYear(makeOffer({ baseSalary: 400_000, k401Pct: 10 }), 1, 'single', 62)
+    expect(r.k401).toBe(K401_BASE + K401_CATCHUP_60)
   })
 
   it('netIncome = grossTotal - k401 - totalTax', () => {
-    const r = calcYear(makeOffer(), 1, 'single')
+    const r = calcYear(makeOffer(), 1, 'single', 30)
     expect(r.netIncome).toBeCloseTo(r.grossTotal - r.k401 - r.totalTax, 1)
   })
 
   it('no-tax state produces stateTax of 0', () => {
-    const r = calcYear(makeOffer({ state: 'TX' }), 1, 'single')
+    const r = calcYear(makeOffer({ state: 'TX' }), 1, 'single', 30)
     expect(r.stateTax).toBe(0)
   })
 
   it('high-tax state produces stateTax > 0', () => {
-    const r = calcYear(makeOffer({ state: 'CA' }), 1, 'single')
+    const r = calcYear(makeOffer({ state: 'CA' }), 1, 'single', 30)
     expect(r.stateTax).toBeGreaterThan(0)
   })
 
   it('effectiveTaxRate = totalTax / grossTotal', () => {
-    const r = calcYear(makeOffer(), 1, 'single')
+    const r = calcYear(makeOffer(), 1, 'single', 30)
     expect(r.effectiveTaxRate).toBeCloseTo(r.totalTax / r.grossTotal, 6)
   })
 
   it('totalTax = federalTax + stateTax + ficaTax', () => {
-    const r = calcYear(makeOffer(), 1, 'single')
+    const r = calcYear(makeOffer(), 1, 'single', 30)
     expect(r.totalTax).toBeCloseTo(r.federalTax + r.stateTax + r.ficaTax, 2)
   })
 })

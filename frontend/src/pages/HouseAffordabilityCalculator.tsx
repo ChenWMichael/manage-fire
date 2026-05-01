@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import {
   AlertCircle, Building2, CheckCircle, CheckCircle2, ChevronDown, ChevronUp,
-  Gift, Home, MapPin, PiggyBank, Receipt, Target, Users, XCircle,
+  Gift, Home, Loader2, MapPin, PiggyBank, Receipt, Target, Users, XCircle,
   type LucideIcon,
 } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import { useLocalStorage } from '../hooks/useLocalStorage'
 import { getSnapshot, saveSnapshot, updateSnapshot } from '../lib/api'
 import {
   CartesianGrid, ComposedChart, Line, ReferenceLine,
@@ -82,9 +83,10 @@ function Field({
   disabled?: boolean
   className?: string
 }) {
+  const id = useId()
   return (
     <div className={className}>
-      <label className="label flex items-center gap-1">
+      <label htmlFor={id} className="label flex items-center gap-1">
         {label}
         {hint && <HintTooltip hint={hint} />}
       </label>
@@ -95,6 +97,7 @@ function Field({
           </span>
         )}
         <input
+          id={id}
           type="number"
           className={`input ${prefix ? 'pl-7' : ''} ${suffix ? 'pr-12' : ''} ${disabled ? 'opacity-60 cursor-not-allowed bg-slate-50' : ''}`}
           value={value}
@@ -250,12 +253,13 @@ function SensitivityTooltip({ active, payload, hasRoommates }: { active?: boolea
 export default function HouseAffordabilityCalculator() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const [inputs, setInputs] = useState<HouseAffordabilityInputs>(DEFAULT_INPUTS)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [inputs, setInputs] = useLocalStorage<HouseAffordabilityInputs>('mf-house-inputs', DEFAULT_INPUTS)
   const [snapshotId, setSnapshotId] = useState<string | null>(null)
+  const [snapshotLoading, setSnapshotLoading] = useState(() => !!searchParams.get('snapshot'))
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [saveError, setSaveError] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => {
     const id = searchParams.get('snapshot')
@@ -265,7 +269,8 @@ export default function HouseAffordabilityCalculator() {
         setInputs(snap.inputs as unknown as HouseAffordabilityInputs)
         setSnapshotId(snap.id)
       })
-      .catch(() => { /* fall through to defaults */ })
+      .catch(() => setSearchParams({}, { replace: true }))
+      .finally(() => setSnapshotLoading(false))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = <K extends keyof HouseAffordabilityInputs>(k: K, v: HouseAffordabilityInputs[K]) =>
@@ -295,6 +300,14 @@ export default function HouseAffordabilityCalculator() {
   }
 
   const result = useMemo(() => calculateHouseAffordability(inputs), [inputs])
+
+  if (snapshotLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 size={28} className="animate-spin text-emerald-500" />
+      </div>
+    )
+  }
 
   const downPaymentDollars = result.effectiveMaxPrice * (inputs.downPaymentPct / 100)
   const isMarried = inputs.filingStatus === 'married_joint'
@@ -326,8 +339,9 @@ export default function HouseAffordabilityCalculator() {
           {/* Household Income */}
           <InputCard icon={Users} title="Household Income" color="bg-emerald-50 text-emerald-600">
             <div>
-              <label className="label">Filing Status</label>
+              <label htmlFor="house-filing" className="label">Filing Status</label>
               <select
+                id="house-filing"
                 className="input"
                 value={inputs.filingStatus}
                 onChange={(e) => set('filingStatus', e.target.value as FilingStatus)}
@@ -441,11 +455,12 @@ export default function HouseAffordabilityCalculator() {
           <InputCard icon={MapPin} title="Location" color="bg-violet-50 text-violet-600">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label flex items-center gap-1">
+                <label htmlFor="house-state" className="label flex items-center gap-1">
                   State
                   <HintTooltip hint="Selects the state's effective property tax rate. You can override it below." />
                 </label>
                 <select
+                  id="house-state"
                   className="input"
                   value={inputs.state}
                   onChange={(e) => handleStateChange(e.target.value)}
@@ -471,11 +486,12 @@ export default function HouseAffordabilityCalculator() {
           {/* Mortgage */}
           <InputCard icon={Building2} title="Mortgage" color="bg-fire-50 text-fire-600">
             <div>
-              <label className="label flex items-center gap-1">
+              <label htmlFor="house-credit" className="label flex items-center gap-1">
                 Credit Score Range
                 <HintTooltip hint="Your credit score affects the mortgage rate lenders will offer. A higher score means a lower rate and lower monthly payments." />
               </label>
               <select
+                id="house-credit"
                 className="input"
                 value={inputs.creditScoreRange}
                 onChange={(e) => handleCreditScoreChange(e.target.value as CreditScoreRange)}
@@ -488,12 +504,13 @@ export default function HouseAffordabilityCalculator() {
 
             <div className="grid grid-cols-2 gap-3 items-end">
               <div>
-                <label className="label flex items-center gap-1">
+                <label htmlFor="house-mortgage-rate" className="label flex items-center gap-1">
                   Mortgage Rate
                   <HintTooltip hint="Annual interest rate. If you have a rate locked in, enable the override. Otherwise we estimate from your credit score." />
                 </label>
                 <div className="relative">
                   <input
+                    id="house-mortgage-rate"
                     type="number"
                     className={`input pr-12 ${!inputs.useCustomRate ? 'opacity-60 bg-slate-50 cursor-not-allowed' : ''}`}
                     value={inputs.mortgageRate}
@@ -535,8 +552,8 @@ export default function HouseAffordabilityCalculator() {
             )}
 
             <div>
-              <label className="label">Loan Term</label>
-              <div className="flex gap-2">
+              <p className="label">Loan Term</p>
+              <div role="group" aria-label="Loan term" className="flex gap-2">
                 {([15, 20, 30] as LoanTerm[]).map((term) => (
                   <button
                     key={term}
@@ -594,11 +611,11 @@ export default function HouseAffordabilityCalculator() {
             </p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label flex items-center gap-1">
+                <p className="label flex items-center gap-1">
                   Number of Roommates
                   <HintTooltip hint="How many roommates you plan to have. Each pays the monthly rent amount below." />
-                </label>
-                <div className="flex gap-1.5">
+                </p>
+                <div role="group" aria-label="Number of roommates" className="flex gap-1.5">
                   {[0, 1, 2, 3, 4].map((n) => (
                     <button
                       key={n}
@@ -742,7 +759,7 @@ export default function HouseAffordabilityCalculator() {
           <button
             onClick={async () => {
               if (!user) { navigate('/auth'); return }
-              setSaveError(false)
+              setSaveError(null)
               const summaryData = {
                 maxAffordablePrice: result.maxPriceByFrontEnd,
                 maxPriceByBackEnd: result.maxPriceByBackEnd,
@@ -764,9 +781,9 @@ export default function HouseAffordabilityCalculator() {
                 }
                 setSaved(true)
                 setTimeout(() => setSaved(false), 3000)
-              } catch {
-                setSaveError(true)
-                setTimeout(() => setSaveError(false), 3000)
+              } catch (err) {
+                setSaveError(err instanceof Error ? err.message : 'Save failed — try again')
+                setTimeout(() => setSaveError(null), 5000)
               }
             }}
             className={`w-full py-2.5 rounded-lg text-sm font-semibold border transition-all duration-150 flex items-center justify-center gap-2 ${
@@ -776,10 +793,12 @@ export default function HouseAffordabilityCalculator() {
             {saved ? <CheckCircle size={14} /> : null}
             {saved
               ? (snapshotId ? 'Updated' : 'Saved to dashboard')
-              : saveError
-              ? 'Save failed — try again'
+              : saveError ? 'Save failed'
               : (snapshotId ? 'Update snapshot' : 'Save to dashboard')}
           </button>
+          {saveError && (
+            <p className="text-xs text-red-600 mt-1.5 text-center">{saveError}</p>
+          )}
         </div>
 
         {/* ── Right: Results ── */}

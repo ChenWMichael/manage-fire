@@ -1,6 +1,7 @@
 from typing import Any, List
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 from supabase import create_client
 
 from app.config import settings
@@ -27,15 +28,49 @@ async def get_snapshots(current_user: dict = Depends(get_current_user)) -> List[
     return result.data
 
 
+SNAPSHOT_LIMIT = 20
+
+
 @router.post("")
 async def create_snapshot(
     snapshot: SnapshotCreate,
     current_user: dict = Depends(get_current_user),
 ) -> Any:
     sb = get_supabase()
+    count_result = (
+        sb.table("calculator_snapshots")
+        .select("id")
+        .eq("user_id", current_user["id"])
+        .execute()
+    )
+    if len(count_result.data) >= SNAPSHOT_LIMIT:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Snapshot limit reached ({SNAPSHOT_LIMIT} max). Delete some snapshots to save new ones.",
+        )
     data = {**snapshot.model_dump(), "user_id": current_user["id"]}
     result = sb.table("calculator_snapshots").insert(data).execute()
     return result.data[0] if result.data else {}
+
+
+class BulkDeleteRequest(BaseModel):
+    ids: List[str] = Field(min_length=1)
+
+
+@router.delete("")
+async def delete_snapshots_bulk(
+    payload: BulkDeleteRequest,
+    current_user: dict = Depends(get_current_user),
+) -> Any:
+    sb = get_supabase()
+    (
+        sb.table("calculator_snapshots")
+        .delete()
+        .in_("id", payload.ids)
+        .eq("user_id", current_user["id"])
+        .execute()
+    )
+    return {"deleted": len(payload.ids)}
 
 
 @router.get("/{snapshot_id}")
@@ -63,6 +98,8 @@ async def update_snapshot(
 ) -> Any:
     sb = get_supabase()
     data = snapshot.model_dump(exclude_none=True)
+    if not data:
+        return {}
     result = (
         sb.table("calculator_snapshots")
         .update(data)

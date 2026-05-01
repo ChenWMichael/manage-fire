@@ -1,12 +1,12 @@
 import {
-  ArrowRight, Briefcase, Calculator, Flame, Home, Pencil, Target, Trash2,
+  ArrowRight, Briefcase, Calculator, Check, Flame, Home, Loader2, Pencil, Target, Trash2,
   TrendingUp, Waves, Zap,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import StatCard from '../components/StatCard'
 import { useAuth } from '../hooks/useAuth'
-import { deleteSnapshot, getSnapshots } from '../lib/api'
+import { deleteSnapshot, deleteSnapshots, getSnapshots } from '../lib/api'
 import type { Snapshot } from '../lib/api'
 import type { FireResult } from '../types'
 import { FIRE_TYPE_META } from '../types'
@@ -54,17 +54,29 @@ const SNAPSHOT_ROUTES: Record<string, string> = {
   offer: '/app/offer',
 }
 
-function SnapshotCard({ snapshot, onDelete }: { snapshot: Snapshot; onDelete: () => void }) {
+function SnapshotCard({
+  snapshot, onDelete, selectionMode, selected, onToggleSelect,
+}: {
+  snapshot: Snapshot
+  onDelete: () => void
+  selectionMode: boolean
+  selected: boolean
+  onToggleSelect: () => void
+}) {
   const navigate = useNavigate()
   const [deleting, setDeleting] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
-  const handleDelete = async () => {
+  const handleDeleteClick = () => setConfirmDelete(true)
+
+  const handleDeleteConfirm = async () => {
     setDeleting(true)
     try {
       await deleteSnapshot(snapshot.id)
       onDelete()
     } catch {
       setDeleting(false)
+      setConfirmDelete(false)
     }
   }
 
@@ -131,11 +143,21 @@ function SnapshotCard({ snapshot, onDelete }: { snapshot: Snapshot; onDelete: ()
     if (snapshot.calculator_type === 'offer') {
       type FourYrEntry = { label: string; totalNet: number; totalGross: number }
       const totals = (summary.fourYearTotals as FourYrEntry[]) ?? []
+      const counts: Record<string, number> = {}
+      totals.forEach((t) => { counts[t.label] = (counts[t.label] || 0) + 1 })
+      const seen: Record<string, number> = {}
+      const displayLabels = totals.map((t) => {
+        if (counts[t.label] > 1) {
+          seen[t.label] = (seen[t.label] || 0) + 1
+          return `${t.label} — Team ${seen[t.label]}`
+        }
+        return t.label
+      })
       return (
         <div className="space-y-1 text-xs mt-2">
-          {totals.map((t) => (
-            <div key={t.label} className="flex justify-between">
-              <span className="text-slate-500 truncate max-w-[120px]">{t.label}</span>
+          {totals.map((t, i) => (
+            <div key={i} className="flex justify-between">
+              <span className="text-slate-500 truncate max-w-[120px]">{displayLabels[i]}</span>
               <span className="font-semibold text-slate-800">{formatCurrency(t.totalNet)} net / 4yr</span>
             </div>
           ))}
@@ -167,9 +189,21 @@ function SnapshotCard({ snapshot, onDelete }: { snapshot: Snapshot; onDelete: ()
   const Icon = typeIcon[snapshot.calculator_type] ?? Calculator
 
   return (
-    <div className="card p-4 space-y-2">
+    <div
+      onClick={selectionMode ? onToggleSelect : undefined}
+      className={`card p-4 space-y-2 transition-all duration-150 ${
+        selectionMode ? 'cursor-pointer' : ''
+      } ${selected ? 'ring-2 ring-blue-400 bg-blue-50/40' : ''}`}
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
+          {selectionMode && (
+            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+              selected ? 'border-blue-500 bg-blue-500' : 'border-slate-300 bg-white'
+            }`}>
+              {selected && <Check size={11} className="text-white" strokeWidth={3} />}
+            </div>
+          )}
           <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${typeColor[snapshot.calculator_type]}`}>
             <Icon size={13} />
           </div>
@@ -178,23 +212,44 @@ function SnapshotCard({ snapshot, onDelete }: { snapshot: Snapshot; onDelete: ()
             <p className="text-xs text-slate-400">{typeLabel[snapshot.calculator_type]} · {date}</p>
           </div>
         </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <button
-            onClick={handleEdit}
-            className="p-1 rounded text-slate-300 hover:text-slate-600 transition-colors"
-            aria-label="Edit snapshot"
-          >
-            <Pencil size={13} />
-          </button>
-          <button
-            onClick={handleDelete}
-            disabled={deleting}
-            className="p-1 rounded text-slate-300 hover:text-red-400 transition-colors"
-            aria-label="Delete snapshot"
-          >
-            <Trash2 size={13} />
-          </button>
-        </div>
+        {!selectionMode && (
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {confirmDelete ? (
+              <>
+                <button
+                  onClick={handleDeleteConfirm}
+                  disabled={deleting}
+                  className="px-2 py-0.5 rounded text-xs font-semibold bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                >
+                  {deleting ? '…' : 'Delete'}
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  className="px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={handleEdit}
+                  className="p-1 rounded text-slate-300 hover:text-slate-600 transition-colors"
+                  aria-label="Edit snapshot"
+                >
+                  <Pencil size={13} />
+                </button>
+                <button
+                  onClick={handleDeleteClick}
+                  className="p-1 rounded text-slate-300 hover:text-red-400 transition-colors"
+                  aria-label="Delete snapshot"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
       {renderSummary()}
     </div>
@@ -207,6 +262,9 @@ export default function Dashboard() {
   const [fireType, setFireType] = useState<string>('regular')
   const [snapshots, setSnapshots] = useState<Snapshot[]>([])
   const [snapshotsLoading, setSnapshotsLoading] = useState(true)
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   useEffect(() => {
     const stored = localStorage.getItem('mf_last_result')
@@ -229,6 +287,31 @@ export default function Dashboard() {
   }, [])
 
   const removeSnapshot = (id: string) => setSnapshots((prev) => prev.filter((s) => s.id !== id))
+
+  const toggleSelect = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+
+  const exitSelectionMode = () => {
+    setSelectionMode(false)
+    setSelectedIds(new Set())
+  }
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    setBulkDeleting(true)
+    try {
+      await deleteSnapshots(ids)
+      setSnapshots((prev) => prev.filter((s) => !selectedIds.has(s.id)))
+      exitSelectionMode()
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
 
   const name = user?.user_metadata?.full_name as string | undefined
     || user?.email?.split('@')[0]
@@ -255,6 +338,8 @@ export default function Dashboard() {
 
       {/* FIRE Stats */}
       {lastResult ? (
+        <>
+        <p className="text-xs text-slate-400 -mb-2">Last calculator session on this device</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
             label="FI Number"
@@ -287,6 +372,7 @@ export default function Dashboard() {
             iconColor="text-blue-500"
           />
         </div>
+        </>
       ) : (
         <div className="card p-8 text-center border-dashed">
           <div className="w-14 h-14 bg-fire-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -324,7 +410,54 @@ export default function Dashboard() {
 
       {/* Saved Snapshots */}
       <div>
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">Saved Snapshots</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-slate-900">Saved Snapshots</h2>
+          {!snapshotsLoading && (
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                snapshots.length >= 20
+                  ? 'bg-red-50 text-red-600'
+                  : snapshots.length >= 16
+                  ? 'bg-amber-50 text-amber-600'
+                  : 'bg-slate-100 text-slate-500'
+              }`}>
+                {snapshots.length} / 20
+              </span>
+              {snapshots.length > 0 && !selectionMode && (
+                <button
+                  onClick={() => setSelectionMode(true)}
+                  className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  Select
+                </button>
+              )}
+              {selectionMode && (
+                <>
+                  <button
+                    onClick={handleBulkDelete}
+                    disabled={selectedIds.size === 0 || bulkDeleting}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                      selectedIds.size === 0
+                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                        : 'bg-red-50 text-red-600 hover:bg-red-100'
+                    }`}
+                  >
+                    {bulkDeleting
+                      ? <Loader2 size={11} className="animate-spin" />
+                      : <Trash2 size={11} />}
+                    {bulkDeleting ? 'Deleting…' : `Delete${selectedIds.size > 0 ? ` ${selectedIds.size}` : ''}`}
+                  </button>
+                  <button
+                    onClick={exitSelectionMode}
+                    className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
         {snapshotsLoading ? (
           <div className="card p-6 text-center text-slate-400 text-sm">Loading…</div>
         ) : snapshots.length === 0 ? (
@@ -337,7 +470,14 @@ export default function Dashboard() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {snapshots.map((s) => (
-              <SnapshotCard key={s.id} snapshot={s} onDelete={() => removeSnapshot(s.id)} />
+              <SnapshotCard
+                key={s.id}
+                snapshot={s}
+                onDelete={() => removeSnapshot(s.id)}
+                selectionMode={selectionMode}
+                selected={selectedIds.has(s.id)}
+                onToggleSelect={() => toggleSelect(s.id)}
+              />
             ))}
           </div>
         )}

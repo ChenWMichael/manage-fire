@@ -23,7 +23,7 @@ def make_sb(data):
     result.data = data
 
     table = MagicMock()
-    for method in ("select", "insert", "update", "delete", "eq", "order", "single"):
+    for method in ("select", "insert", "update", "delete", "eq", "in_", "order", "single"):
         getattr(table, method).return_value = table
     table.execute.return_value = result
 
@@ -73,11 +73,51 @@ class TestSnapshotsHappyPath:
                 r = client.post("/api/snapshots", json={**VALID_SNAPSHOT, "calculator_type": calc_type})
             assert r.status_code == 200, f"Expected 200 for calculator_type={calc_type}"
 
+    def test_get_snapshot_by_id_returns_record(self, client):
+        record = {**VALID_SNAPSHOT, "id": "snap-1", "user_id": "test-user-id"}
+        with patch("app.routes.snapshots.get_supabase", return_value=make_sb(record)):
+            r = client.get("/api/snapshots/snap-1")
+        assert r.status_code == 200
+        assert r.json()["name"] == "My FIRE Snapshot"
+
+    def test_patch_snapshot_updates_name(self, client):
+        updated = {**VALID_SNAPSHOT, "id": "snap-1", "name": "Updated Name"}
+        with patch("app.routes.snapshots.get_supabase", return_value=make_sb([updated])):
+            r = client.patch("/api/snapshots/snap-1", json={"name": "Updated Name"})
+        assert r.status_code == 200
+        assert r.json()["name"] == "Updated Name"
+
+    def test_patch_snapshot_empty_body_returns_200(self, client):
+        with patch("app.routes.snapshots.get_supabase", return_value=make_sb([])):
+            r = client.patch("/api/snapshots/snap-1", json={})
+        assert r.status_code == 200
+        assert r.json() == {}
+
     def test_delete_snapshot_returns_message(self, client):
         with patch("app.routes.snapshots.get_supabase", return_value=make_sb([])):
             r = client.delete("/api/snapshots/snap-123")
         assert r.status_code == 200
         assert r.json()["message"] == "Deleted"
+
+    def test_bulk_delete_snapshots_returns_deleted_count(self, client):
+        with patch("app.routes.snapshots.get_supabase", return_value=make_sb([])):
+            r = client.request("DELETE", "/api/snapshots", json={"ids": ["snap-1", "snap-2"]})
+        assert r.status_code == 200
+        assert r.json()["deleted"] == 2
+
+    def test_bulk_delete_empty_ids_returns_422(self, client):
+        r = client.request("DELETE", "/api/snapshots", json={"ids": []})
+        assert r.status_code == 422
+
+    def test_bulk_delete_no_token_returns_403(self, unauthed_client):
+        assert unauthed_client.request("DELETE", "/api/snapshots", json={"ids": ["snap-1"]}).status_code == 403
+
+    def test_create_snapshot_at_limit_returns_400(self, client):
+        existing = [{"id": f"snap-{i}"} for i in range(20)]
+        with patch("app.routes.snapshots.get_supabase", return_value=make_sb(existing)):
+            r = client.post("/api/snapshots", json=VALID_SNAPSHOT)
+        assert r.status_code == 400
+        assert "limit" in r.json()["detail"].lower()
 
 
 # ─── Snapshots — validation ───────────────────────────────────────────────────
@@ -190,6 +230,12 @@ class TestNewEndpointsAuthRejection:
     """
     def test_post_snapshot_no_token_returns_403(self, unauthed_client):
         assert unauthed_client.post("/api/snapshots", json=VALID_SNAPSHOT).status_code == 403
+
+    def test_get_snapshot_by_id_no_token_returns_403(self, unauthed_client):
+        assert unauthed_client.get("/api/snapshots/snap-1").status_code == 403
+
+    def test_patch_snapshot_no_token_returns_403(self, unauthed_client):
+        assert unauthed_client.patch("/api/snapshots/snap-1", json={"name": "x"}).status_code == 403
 
     def test_delete_snapshot_no_token_returns_403(self, unauthed_client):
         assert unauthed_client.delete("/api/snapshots/snap-1").status_code == 403

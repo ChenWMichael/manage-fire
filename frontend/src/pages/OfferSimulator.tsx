@@ -1,14 +1,17 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Briefcase, CheckCircle, Plus, Trash2 } from 'lucide-react'
+import { useEffect, useId, useMemo, useState } from 'react'
+import { Briefcase, CheckCircle, Loader2, Plus, Trash2 } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import { useLocalStorage } from '../hooks/useLocalStorage'
 import { getSnapshot, saveSnapshot, updateSnapshot } from '../lib/api'
 import {
   type FilingStatus,
   type RsuSchedule,
   type Offer,
   type YearBreakdown,
+  K401_BASE,
   calcYear,
+  k401AnnualLimit,
 } from '../utils/offerSimulatorCalculations'
 
 const STATES: { code: string; name: string }[] = [
@@ -76,10 +79,12 @@ const DEFAULT_OFFER = (): Offer => ({
 // ─── Small field components ────────────────────────────────────────────────────
 
 function TField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const id = useId()
   return (
     <div>
-      <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
+      <label htmlFor={id} className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
       <input
+        id={id}
         type="text"
         value={value}
         onChange={e => onChange(e.target.value)}
@@ -95,15 +100,17 @@ function NField({
   label: string; value: number; onChange: (v: number) => void
   prefix?: string; suffix?: string; step?: number; hint?: string
 }) {
+  const id = useId()
   return (
     <div>
-      <label className="block text-xs font-medium text-slate-600 mb-1">
+      <label htmlFor={id} className="block text-xs font-medium text-slate-600 mb-1">
         {label}
         {hint && <span className="ml-1 text-slate-400 font-normal">({hint})</span>}
       </label>
       <div className="relative">
         {prefix && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm select-none">{prefix}</span>}
         <input
+          id={id}
           type="number"
           value={value}
           min={0}
@@ -122,10 +129,12 @@ function SField<T extends string>({
 }: {
   label: string; value: T; onChange: (v: T) => void; options: { value: T; label: string }[]
 }) {
+  const id = useId()
   return (
     <div>
-      <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
+      <label htmlFor={id} className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
       <select
+        id={id}
         value={value}
         onChange={e => onChange(e.target.value as T)}
         className="input text-sm py-1.5"
@@ -139,7 +148,7 @@ function SField<T extends string>({
 // ─── OfferCard ────────────────────────────────────────────────────────────────
 
 function OfferCard({
-  offer, index, colors, onChange, onRemove, canRemove,
+  offer, index, colors, onChange, onRemove, canRemove, k401Limit,
 }: {
   offer: Offer
   index: number
@@ -147,6 +156,7 @@ function OfferCard({
   onChange: (o: Offer) => void
   onRemove: () => void
   canRemove: boolean
+  k401Limit: number
 }) {
   const set = <K extends keyof Offer>(key: K, val: Offer[K]) => onChange({ ...offer, [key]: val })
 
@@ -192,7 +202,14 @@ function OfferCard({
       </div>
 
       <div className="border-t border-slate-100 pt-3">
-        <NField label="401(k) Contribution" value={offer.k401Pct} onChange={v => set('k401Pct', v)} suffix="% of base" step={1} hint="pre-tax, max $23,500" />
+        <NField
+          label="401(k) Contribution"
+          value={offer.k401Pct}
+          onChange={v => set('k401Pct', v)}
+          suffix="% of base"
+          step={1}
+          hint={`max $${k401Limit.toLocaleString()}${k401Limit > K401_BASE ? ' (catch-up)' : ''}`}
+        />
       </div>
     </div>
   )
@@ -272,14 +289,15 @@ function ResultCard({
 // ─── Year-by-year summary table ───────────────────────────────────────────────
 
 function YearTable({
-  offers, filingStatus, colors,
+  offers, filingStatus, age, colors,
 }: {
   offers: Offer[]
   filingStatus: FilingStatus
+  age: number
   colors: typeof OFFER_COLORS
 }) {
   const years = [1, 2, 3, 4] as const
-  const data = offers.map(o => years.map(y => calcYear(o, y, filingStatus)))
+  const data = offers.map(o => years.map(y => calcYear(o, y, filingStatus, age)))
   const allNets = data.flatMap(rows => rows.map(r => r.netIncome))
   const maxNet = Math.max(...allNets)
 
@@ -337,28 +355,33 @@ function YearTable({
 export default function OfferSimulator() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const [offers, setOffers] = useState<Offer[]>([DEFAULT_OFFER()])
-  const [filingStatus, setFilingStatus] = useState<FilingStatus>('single')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [offers, setOffers] = useLocalStorage<Offer[]>('mf-offer-offers', [DEFAULT_OFFER()])
+  const [filingStatus, setFilingStatus] = useLocalStorage<FilingStatus>('mf-offer-filing-status', 'single')
+  const [age, setAge] = useLocalStorage<number>('mf-offer-age', 30)
   const [snapshotId, setSnapshotId] = useState<string | null>(null)
+  const [snapshotLoading, setSnapshotLoading] = useState(() => !!searchParams.get('snapshot'))
   const [selectedYear, setSelectedYear] = useState<1 | 2 | 3 | 4>(1)
   const [saved, setSaved] = useState(false)
-  const [saveError, setSaveError] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => {
     const id = searchParams.get('snapshot')
     if (!id) return
     getSnapshot(id)
       .then((snap) => {
-        const { offers: loadedOffers, filingStatus: loadedFiling } = snap.inputs as unknown as {
+        const { offers: loadedOffers, filingStatus: loadedFiling, age: loadedAge } = snap.inputs as unknown as {
           offers: Offer[]
           filingStatus: FilingStatus
+          age: number
         }
         if (loadedOffers) setOffers(loadedOffers)
         if (loadedFiling) setFilingStatus(loadedFiling)
+        if (loadedAge) setAge(loadedAge)
         setSnapshotId(snap.id)
       })
-      .catch(() => { /* fall through to defaults */ })
+      .catch(() => setSearchParams({}, { replace: true }))
+      .finally(() => setSnapshotLoading(false))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const addOffer = () => {
@@ -369,9 +392,17 @@ export default function OfferSimulator() {
     setOffers(prev => prev.map(o => (o.id === id ? updated : o)))
 
   const breakdowns = useMemo(
-    () => offers.map(o => calcYear(o, selectedYear, filingStatus)),
-    [offers, selectedYear, filingStatus],
+    () => offers.map(o => calcYear(o, selectedYear, filingStatus, age)),
+    [offers, selectedYear, filingStatus, age],
   )
+
+  if (snapshotLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 size={28} className="animate-spin text-slate-500" />
+      </div>
+    )
+  }
 
   const colCls = offers.length === 1
     ? 'grid-cols-1 max-w-sm'
@@ -394,7 +425,20 @@ export default function OfferSimulator() {
             Compare up to 3 offers side-by-side with after-tax income breakdown.
           </p>
         </div>
-        <div className="flex items-center gap-3 flex-shrink-0">
+        <div className="flex items-center gap-3 flex-shrink-0 flex-wrap">
+          {/* Age */}
+          <div className="flex items-center gap-1.5">
+            <label htmlFor="offer-age" className="text-xs font-medium text-slate-600 whitespace-nowrap">Your age</label>
+            <input
+              id="offer-age"
+              type="number"
+              min={18}
+              max={80}
+              value={age}
+              onChange={e => setAge(Math.max(18, Math.min(80, Number(e.target.value) || 30)))}
+              className="w-14 text-center input text-xs py-1"
+            />
+          </div>
           {/* Filing status */}
           <div className="flex bg-slate-100 rounded-lg p-0.5">
             <button className={toggleCls(filingStatus === 'single')} onClick={() => setFilingStatus('single')}>
@@ -428,6 +472,7 @@ export default function OfferSimulator() {
             onChange={updated => updateOffer(offer.id, updated)}
             onRemove={() => removeOffer(offer.id)}
             canRemove={offers.length > 1}
+            k401Limit={k401AnnualLimit(age)}
           />
         ))}
       </div>
@@ -463,35 +508,35 @@ export default function OfferSimulator() {
 
       {/* Year-by-year table */}
       <div className="mb-6">
-        <YearTable offers={offers} filingStatus={filingStatus} colors={OFFER_COLORS} />
+        <YearTable offers={offers} filingStatus={filingStatus} age={age} colors={OFFER_COLORS} />
       </div>
 
       <div className="mb-6">
         <button
           onClick={async () => {
             if (!user) { navigate('/auth'); return }
-            setSaveError(false)
+            setSaveError(null)
             const fourYearTotals = offers.map((o) => ({
               label: o.label,
-              totalNet: ([1, 2, 3, 4] as const).reduce((sum, y) => sum + calcYear(o, y, filingStatus).netIncome, 0),
-              totalGross: ([1, 2, 3, 4] as const).reduce((sum, y) => sum + calcYear(o, y, filingStatus).grossTotal, 0),
+              totalNet: ([1, 2, 3, 4] as const).reduce((sum, y) => sum + calcYear(o, y, filingStatus, age).netIncome, 0),
+              totalGross: ([1, 2, 3, 4] as const).reduce((sum, y) => sum + calcYear(o, y, filingStatus, age).grossTotal, 0),
             }))
             const summaryData = { fourYearTotals, offerCount: offers.length, filingStatus }
             try {
               if (snapshotId) {
                 await updateSnapshot(snapshotId, {
-                  inputs: { offers, filingStatus } as unknown as Record<string, unknown>,
+                  inputs: { offers, filingStatus, age } as unknown as Record<string, unknown>,
                   summary: summaryData,
                 })
               } else {
                 const date = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                await saveSnapshot('offer', `Offer Comparison — ${date}`, { offers, filingStatus } as unknown as Record<string, unknown>, summaryData)
+                await saveSnapshot('offer', `Offer Comparison — ${date}`, { offers, filingStatus, age } as unknown as Record<string, unknown>, summaryData)
               }
               setSaved(true)
               setTimeout(() => setSaved(false), 3000)
-            } catch {
-              setSaveError(true)
-              setTimeout(() => setSaveError(false), 3000)
+            } catch (err) {
+              setSaveError(err instanceof Error ? err.message : 'Save failed — try again')
+              setTimeout(() => setSaveError(null), 5000)
             }
           }}
             className={`w-full py-2.5 rounded-lg text-sm font-semibold border transition-all duration-150 flex items-center justify-center gap-2 ${
@@ -501,14 +546,16 @@ export default function OfferSimulator() {
             {saved ? <CheckCircle size={14} /> : null}
             {saved
               ? (snapshotId ? 'Updated' : 'Saved to dashboard')
-              : saveError
-              ? 'Save failed — try again'
+              : saveError ? 'Save failed'
               : (snapshotId ? 'Update snapshot' : 'Save to dashboard')}
           </button>
+          {saveError && (
+            <p className="text-xs text-red-600 mt-1.5 text-center">{saveError}</p>
+          )}
       </div>
 
       <p className="text-xs text-slate-400 text-center">
-        2025 federal brackets · Simplified state income tax rates · For general planning only — consult a tax professional for personalized advice.
+        2026 federal brackets &amp; 401(k) limits · Simplified state income tax rates · For general planning only — consult a tax professional for personalized advice.
       </p>
     </div>
   )

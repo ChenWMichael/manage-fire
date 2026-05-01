@@ -3,12 +3,14 @@ import {
   ChevronDown,
   ChevronUp,
   Home,
+  Loader2,
   TrendingUp,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import HintTooltip from '../components/HintTooltip'
 import { useAuth } from '../hooks/useAuth'
+import { useLocalStorage } from '../hooks/useLocalStorage'
 import { getSnapshot, saveSnapshot, updateSnapshot } from '../lib/api'
 import {
   Area,
@@ -71,9 +73,10 @@ function Field({
   prefix?: string; suffix?: string; min?: number; max?: number
   step?: number; hint?: string; small?: boolean; disabled?: boolean
 }) {
+  const id = useId()
   return (
     <div>
-      <label className="flex items-center gap-1 text-sm font-medium text-slate-700 mb-1">
+      <label htmlFor={id} className="flex items-center gap-1 text-sm font-medium text-slate-700 mb-1">
         {label}
         {hint && <HintTooltip hint={hint} />}
       </label>
@@ -82,6 +85,7 @@ function Field({
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm select-none">{prefix}</span>
         )}
         <input
+          id={id}
           type="number"
           className={`input ${prefix ? 'pl-7' : ''} ${suffix ? 'pr-10' : ''} ${small ? 'py-1.5 text-sm' : ''} ${disabled ? 'opacity-60 cursor-not-allowed bg-slate-50' : ''}`}
           value={value}
@@ -247,14 +251,15 @@ function YearTable({ data }: { data: ReturnType<typeof calculateRentVsBuy>['year
 export default function RentBuyCalculator() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const [inputs, setInputs] = useState<RentBuyInputs>(DEFAULT_INPUTS)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [inputs, setInputs] = useLocalStorage<RentBuyInputs>('mf-rentbuy-inputs', DEFAULT_INPUTS)
   const [snapshotId, setSnapshotId] = useState<string | null>(null)
+  const [snapshotLoading, setSnapshotLoading] = useState(() => !!searchParams.get('snapshot'))
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [showTable, setShowTable] = useState(false)
   const [chartView, setChartView] = useState<'networth' | 'monthly'>('networth')
   const [saved, setSaved] = useState(false)
-  const [saveError, setSaveError] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => {
     const id = searchParams.get('snapshot')
@@ -264,7 +269,8 @@ export default function RentBuyCalculator() {
         setInputs(snap.inputs as unknown as RentBuyInputs)
         setSnapshotId(snap.id)
       })
-      .catch(() => { /* fall through to defaults */ })
+      .catch(() => setSearchParams({}, { replace: true }))
+      .finally(() => setSnapshotLoading(false))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = <K extends keyof RentBuyInputs>(key: K, value: RentBuyInputs[K]) =>
@@ -313,6 +319,14 @@ export default function RentBuyCalculator() {
     return max * 1.2
   }, [result])
 
+  if (snapshotLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 size={28} className="animate-spin text-violet-500" />
+      </div>
+    )
+  }
+
   const { recommendation, breakEvenYear, buyFinalNetWorth, rentFinalNetWorth } = result
   const recColors = {
     buy:     { banner: 'bg-violet-50 border-violet-200', text: 'text-violet-700', badge: 'bg-violet-600' },
@@ -343,8 +357,9 @@ export default function RentBuyCalculator() {
           {/* Location & Property */}
           <InputCard icon={Home} title="Property" color="bg-violet-50 text-violet-600">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">State</label>
+              <label htmlFor="rent-buy-state" className="block text-sm font-medium text-slate-700 mb-1">State</label>
               <select
+                id="rent-buy-state"
                 className="input"
                 value={inputs.state}
                 onChange={(e) => handleStateChange(e.target.value)}
@@ -404,8 +419,8 @@ export default function RentBuyCalculator() {
                 hint="Current 30-year fixed rates are around 6.5–7.5% (as of 2025). Check Bankrate or your lender for today's rate."
               />
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Loan Term</label>
-                <div className="flex rounded-lg overflow-hidden border border-slate-200">
+                <p className="block text-sm font-medium text-slate-700 mb-1">Loan Term</p>
+                <div role="group" aria-label="Loan term" className="flex rounded-lg overflow-hidden border border-slate-200">
                   {([15, 30] as const).map((t) => (
                     <button
                       key={t}
@@ -601,8 +616,9 @@ export default function RentBuyCalculator() {
                   </p>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Federal Tax Bracket</label>
+                      <label htmlFor="rent-buy-tax-bracket" className="block text-sm font-medium text-slate-700 mb-1">Federal Tax Bracket</label>
                       <select
+                        id="rent-buy-tax-bracket"
                         className="input py-1.5 text-sm"
                         value={inputs.federalTaxBracket}
                         onChange={(e) => set('federalTaxBracket', Number(e.target.value))}
@@ -613,8 +629,9 @@ export default function RentBuyCalculator() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Filing Status</label>
+                      <label htmlFor="rent-buy-filing" className="block text-sm font-medium text-slate-700 mb-1">Filing Status</label>
                       <select
+                        id="rent-buy-filing"
                         className="input py-1.5 text-sm"
                         value={inputs.filingStatus}
                         onChange={(e) => set('filingStatus', e.target.value as RentBuyInputs['filingStatus'])}
@@ -643,7 +660,7 @@ export default function RentBuyCalculator() {
           <button
             onClick={async () => {
               if (!user) { navigate('/auth'); return }
-              setSaveError(false)
+              setSaveError(null)
               const summaryData = {
                 recommendation,
                 breakEvenYear,
@@ -666,9 +683,9 @@ export default function RentBuyCalculator() {
                 }
                 setSaved(true)
                 setTimeout(() => setSaved(false), 3000)
-              } catch {
-                setSaveError(true)
-                setTimeout(() => setSaveError(false), 3000)
+              } catch (err) {
+                setSaveError(err instanceof Error ? err.message : 'Save failed — try again')
+                setTimeout(() => setSaveError(null), 5000)
               }
             }}
             className={`w-full py-2.5 rounded-lg text-sm font-semibold border transition-all duration-150 flex items-center justify-center gap-2 ${
@@ -678,10 +695,12 @@ export default function RentBuyCalculator() {
             {saved ? <CheckCircle size={14} /> : null}
             {saved
               ? (snapshotId ? 'Updated' : 'Saved to dashboard')
-              : saveError
-              ? 'Save failed — try again'
+              : saveError ? 'Save failed'
               : (snapshotId ? 'Update snapshot' : 'Save to dashboard')}
           </button>
+          {saveError && (
+            <p className="text-xs text-red-600 mt-1.5 text-center">{saveError}</p>
+          )}
         </div>
 
         {/* ── RIGHT: Results ────────────────────────────────────────────── */}

@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 
-type Mode = 'login' | 'register'
+type Mode = 'login' | 'register' | 'reset'
 
 export default function AuthPage() {
   const navigate = useNavigate()
@@ -32,7 +32,7 @@ export default function AuthPage() {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
         navigate('/app/dashboard')
-      } else {
+      } else if (mode === 'register') {
         const { error } = await supabase.auth.signUp({
           email,
           password,
@@ -41,12 +41,24 @@ export default function AuthPage() {
         if (error) throw error
         setSuccess('Account created! Check your email to confirm, then sign in.')
         setMode('login')
+      } else {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/auth`,
+        })
+        if (error) throw error
+        setSuccess('Password reset email sent — check your inbox.')
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
       setLoading(false)
     }
+  }
+
+  const switchMode = (next: Mode) => {
+    setMode(next)
+    setError('')
+    setSuccess('')
   }
 
   return (
@@ -59,28 +71,31 @@ export default function AuthPage() {
       </Link>
 
       <div className="card w-full max-w-md p-8">
-        {/* Mode tabs */}
-        <div className="flex bg-slate-100 rounded-lg p-1 mb-7">
-          {(['login', 'register'] as Mode[]).map((m) => (
-            <button
-              key={m}
-              onClick={() => { setMode(m); setError(''); setSuccess('') }}
-              className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all duration-150 ${
-                mode === m ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              {m === 'login' ? 'Sign in' : 'Create account'}
-            </button>
-          ))}
-        </div>
+        {mode !== 'reset' && (
+          <div className="flex bg-slate-100 rounded-lg p-1 mb-7">
+            {(['login', 'register'] as Mode[]).map((m) => (
+              <button
+                key={m}
+                onClick={() => switchMode(m)}
+                className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all duration-150 ${
+                  mode === m ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {m === 'login' ? 'Sign in' : 'Create account'}
+              </button>
+            ))}
+          </div>
+        )}
 
         <h1 className="text-xl font-bold text-slate-900 mb-1">
-          {mode === 'login' ? 'Welcome back' : 'Start your FIRE journey'}
+          {mode === 'login' ? 'Welcome back' : mode === 'register' ? 'Start your FIRE journey' : 'Reset your password'}
         </h1>
         <p className="text-slate-500 text-sm mb-6">
           {mode === 'login'
             ? 'Sign in to access your FIRE dashboard'
-            : 'Create a free account to get started'}
+            : mode === 'register'
+            ? 'Create a free account to get started'
+            : 'Enter your email and we\'ll send a reset link.'}
         </p>
 
         {error && (
@@ -97,8 +112,9 @@ export default function AuthPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           {mode === 'register' && (
             <div>
-              <label className="label">Full name</label>
+              <label htmlFor="auth-fullname" className="label">Full name</label>
               <input
+                id="auth-fullname"
                 className="input"
                 type="text"
                 placeholder="Jane Doe"
@@ -109,8 +125,9 @@ export default function AuthPage() {
             </div>
           )}
           <div>
-            <label className="label">Email</label>
+            <label htmlFor="auth-email" className="label">Email</label>
             <input
+              id="auth-email"
               className="input"
               type="email"
               placeholder="you@example.com"
@@ -119,33 +136,56 @@ export default function AuthPage() {
               required
             />
           </div>
-          <div>
-            <label className="label">Password</label>
-            <input
-              className="input"
-              type="password"
-              placeholder={mode === 'register' ? 'At least 8 characters' : '••••••••'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={8}
-            />
-          </div>
+          {mode !== 'reset' && (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label htmlFor="auth-password" className="label mb-0">Password</label>
+                {mode === 'login' && (
+                  <button
+                    type="button"
+                    onClick={() => switchMode('reset')}
+                    className="text-xs text-fire-600 hover:underline"
+                  >
+                    Forgot password?
+                  </button>
+                )}
+              </div>
+              <input
+                id="auth-password"
+                className="input"
+                type="password"
+                placeholder={mode === 'register' ? 'At least 8 characters' : '••••••••'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={8}
+              />
+            </div>
+          )}
           <button type="submit" className="btn-primary w-full py-2.5 flex items-center justify-center gap-2" disabled={loading}>
             {loading ? <Loader2 size={16} className="animate-spin" /> : null}
-            {mode === 'login' ? 'Sign in' : 'Create account'}
+            {mode === 'login' ? 'Sign in' : mode === 'register' ? 'Create account' : 'Send reset link'}
           </button>
         </form>
 
-        <p className="mt-5 text-center text-xs text-slate-400">
-          {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
-          <button
-            onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); setSuccess('') }}
-            className="text-fire-600 font-semibold hover:underline"
-          >
-            {mode === 'login' ? 'Sign up free' : 'Sign in'}
-          </button>
-        </p>
+        {mode === 'reset' ? (
+          <p className="mt-5 text-center text-xs text-slate-400">
+            Remember your password?{' '}
+            <button onClick={() => switchMode('login')} className="text-fire-600 font-semibold hover:underline">
+              Back to sign in
+            </button>
+          </p>
+        ) : (
+          <p className="mt-5 text-center text-xs text-slate-400">
+            {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
+            <button
+              onClick={() => switchMode(mode === 'login' ? 'register' : 'login')}
+              className="text-fire-600 font-semibold hover:underline"
+            >
+              {mode === 'login' ? 'Sign up free' : 'Sign in'}
+            </button>
+          </p>
+        )}
       </div>
 
       <div className="mt-4 text-center">

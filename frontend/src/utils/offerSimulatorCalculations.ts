@@ -45,7 +45,17 @@ export const FED_MARRIED: Bracket[] = [
 ]
 export const STD_DEDUCTION: Record<FilingStatus, number> = { single: 15_000, married: 30_000 }
 export const SS_WAGE_BASE = 176_100
-export const K401_LIMIT = 23_500
+
+// 2026 401(k) limits (IRS)
+export const K401_BASE = 24_500
+export const K401_CATCHUP_50 = 7_500   // age 50–59 and 64+
+export const K401_CATCHUP_60 = 11_250  // SECURE 2.0 super catch-up, age 60–63
+
+export function k401AnnualLimit(age: number): number {
+  if (age >= 60 && age <= 63) return K401_BASE + K401_CATCHUP_60
+  if (age >= 50) return K401_BASE + K401_CATCHUP_50
+  return K401_BASE
+}
 
 export const STATE_BRACKETS: Record<string, Bracket[]> = {
   AK: [], FL: [], NV: [], SD: [], TX: [], WA: [], WY: [],
@@ -133,14 +143,14 @@ export function rsuVest(total: number, schedule: RsuSchedule, year: 1 | 2 | 3 | 
   return total * (table[schedule][year - 1] ?? 0)
 }
 
-export function calcYear(offer: Offer, year: 1 | 2 | 3 | 4, status: FilingStatus): YearBreakdown {
+export function calcYear(offer: Offer, year: 1 | 2 | 3 | 4, status: FilingStatus, age: number): YearBreakdown {
   const grossBase = offer.baseSalary
   const grossBonus = offer.baseSalary * (offer.annualBonusPct / 100)
   const grossSigning = year === 1 ? offer.signingBonus : 0
   const grossRsu = rsuVest(offer.rsuTotalGrant, offer.rsuSchedule, year)
   const grossTotal = grossBase + grossBonus + grossSigning + grossRsu
 
-  const k401 = Math.min(offer.baseSalary * (offer.k401Pct / 100), K401_LIMIT)
+  const k401 = Math.min(offer.baseSalary * (offer.k401Pct / 100), k401AnnualLimit(age))
   const deduction = STD_DEDUCTION[status]
 
   const federalTaxable = Math.max(0, grossTotal - k401 - deduction)
