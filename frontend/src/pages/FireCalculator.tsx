@@ -458,8 +458,8 @@ function ProjectionTable({ result, withdrawalRate, annualExpenses, retirementAge
     nominal ? Math.pow(1 + inflationRate / 100, age - currentAge) : 1
 
   return (
-    <div className="overflow-auto max-h-96">
-      <table className="w-full text-xs">
+    <div className="overflow-x-auto overflow-y-auto max-h-96">
+      <table className="w-full min-w-[480px] text-xs">
         <thead className="sticky top-0 bg-white border-b border-slate-200 z-10">
           <tr>
             <th className="text-left font-semibold text-slate-500 px-3 py-2 w-12">Age</th>
