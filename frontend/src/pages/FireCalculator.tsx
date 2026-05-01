@@ -91,18 +91,33 @@ function Field({
 
 // ─── InputCard ────────────────────────────────────────────────────────────────
 
-function InputCard({ icon: Icon, title, color, children }: {
+function InputCard({ icon: Icon, title, color, children, collapsible, defaultOpen = true, summary }: {
   icon: React.ElementType; title: string; color: string; children: React.ReactNode
+  collapsible?: boolean; defaultOpen?: boolean; summary?: string
 }) {
+  const [open, setOpen] = useState(defaultOpen)
   return (
     <div className="card p-5 space-y-4">
-      <div className="flex items-center gap-2">
-        <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${color}`}>
-          <Icon size={14} />
+      <div
+        className={`flex items-center justify-between ${collapsible ? 'cursor-pointer select-none' : 'gap-2'}`}
+        onClick={collapsible ? () => setOpen(v => !v) : undefined}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${color}`}>
+            <Icon size={14} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-800">{title}</p>
+            {collapsible && !open && summary && (
+              <p className="text-xs text-slate-400 truncate mt-0.5">{summary}</p>
+            )}
+          </div>
         </div>
-        <p className="text-sm font-semibold text-slate-800">{title}</p>
+        {collapsible && (
+          <ChevronDown size={14} className={`text-slate-400 flex-shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+        )}
       </div>
-      {children}
+      {(!collapsible || open) && children}
     </div>
   )
 }
@@ -554,6 +569,8 @@ export default function FireCalculator() {
   const [nominal, setNominal] = useState(false)
   const [inflationRate, setInflationRate] = useState(3)
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
+  const [lifeEventsOpen, setLifeEventsOpen] = useState(false)
+  const [accountsOpen, setAccountsOpen] = useState(true)
 
   useEffect(() => {
     const id = searchParams.get('snapshot')
@@ -702,7 +719,7 @@ export default function FireCalculator() {
         <div className="xl:col-span-2 space-y-4">
 
           {/* Timeline */}
-          <InputCard icon={TrendingUp} title="Timeline" color="bg-fire-50 text-fire-600">
+          <InputCard icon={TrendingUp} title="Timeline" color="bg-fire-50 text-fire-600" collapsible>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Current Age" value={inputs.currentAge} onChange={(v) => set('currentAge', v)} min={18} max={80} />
               <Field label="Retire By" value={inputs.retirementAge} onChange={(v) => set('retirementAge', v)} min={18} max={100}
@@ -712,62 +729,73 @@ export default function FireCalculator() {
 
           {/* Investment Accounts */}
           <div className="card p-5 space-y-4">
-            <div className="flex items-center justify-between">
+            <button
+              onClick={() => setAccountsOpen(v => !v)}
+              className="w-full flex items-center justify-between"
+            >
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-fire-50 text-fire-600">
                   <TrendingUp size={14} />
                 </div>
                 <p className="text-sm font-semibold text-slate-800">Investment Accounts</p>
               </div>
-              <div className="text-right">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wide">Total Portfolio</p>
-                <p className="text-sm font-bold text-slate-900">{formatCurrencyFull(totalBalance)}</p>
+              <div className="flex items-center gap-2">
+                <div className="text-right">
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wide">Total Portfolio</p>
+                  <p className="text-sm font-bold text-slate-900">{formatCurrencyFull(totalBalance)}</p>
+                </div>
+                <ChevronDown size={14} className={`text-slate-400 flex-shrink-0 transition-transform duration-200 ${accountsOpen ? 'rotate-180' : ''}`} />
               </div>
-            </div>
+            </button>
 
-            <p className="text-xs text-slate-500 -mt-2">
-              Trad 401(k), IRA, brokerage — accounts that compound toward your FIRE number. All use the same expected return.
-            </p>
+            {accountsOpen && (
+              <>
+                <p className="text-xs text-slate-500 -mt-2">
+                  Trad 401(k), IRA, brokerage — accounts that compound toward your FIRE number. All use the same expected return.
+                </p>
 
-            {inputs.accounts.length > 0 && (
-              <div className="space-y-3">
-                {inputs.accounts.map((account) => (
-                  <AccountForm key={account.id} account={account}
-                    onChange={updateAccount} onDelete={() => deleteAccount(account.id)} />
-                ))}
-              </div>
+                {inputs.accounts.length > 0 && (
+                  <div className="space-y-3">
+                    {inputs.accounts.map((account) => (
+                      <AccountForm key={account.id} account={account}
+                        onChange={updateAccount} onDelete={() => deleteAccount(account.id)} />
+                    ))}
+                  </div>
+                )}
+
+                {inputs.accounts.length > 1 && (
+                  <div className="flex items-center justify-between text-xs border-t border-slate-100 pt-2">
+                    <span className="text-slate-500">Total contribution</span>
+                    <span className="font-semibold text-slate-700">{formatCurrencyFull(Math.round(totalMonthly))}/mo · {formatCurrencyFull(Math.round(totalMonthly * 12))}/yr</span>
+                  </div>
+                )}
+
+                <div>
+                  <p className="text-xs font-medium text-slate-500 mb-2">Add account</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                    {ACCOUNT_TEMPLATES.map((t) => (
+                      <button key={t.name} onClick={() => addAccount(t)}
+                        className="flex items-center justify-center gap-1 h-8 text-[11px] font-semibold text-slate-600 bg-slate-100 px-1.5 rounded-lg hover:bg-slate-200 transition-colors leading-tight text-center">
+                        <Plus size={9} className="shrink-0" />
+                        <span className="truncate">{t.shortLabel}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
             )}
-
-            {inputs.accounts.length > 1 && (
-              <div className="flex items-center justify-between text-xs border-t border-slate-100 pt-2">
-                <span className="text-slate-500">Total contribution</span>
-                <span className="font-semibold text-slate-700">{formatCurrencyFull(Math.round(totalMonthly))}/mo · {formatCurrencyFull(Math.round(totalMonthly * 12))}/yr</span>
-              </div>
-            )}
-
-            <div>
-              <p className="text-xs font-medium text-slate-500 mb-2">Add account</p>
-              <div className="grid grid-cols-4 gap-1.5">
-                {ACCOUNT_TEMPLATES.map((t) => (
-                  <button key={t.name} onClick={() => addAccount(t)}
-                    className="flex items-center justify-center gap-1 h-8 text-[11px] font-semibold text-slate-600 bg-slate-100 px-1.5 rounded-lg hover:bg-slate-200 transition-colors leading-tight text-center">
-                    <Plus size={9} className="shrink-0" />
-                    <span className="truncate">{t.shortLabel}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
           </div>
 
           {/* Expenses */}
-          <InputCard icon={Home} title="Retirement Expenses" color="bg-violet-50 text-violet-600">
+          <InputCard icon={Home} title="Retirement Expenses" color="bg-violet-50 text-violet-600" collapsible>
             <Field label="Annual spending in retirement" value={inputs.annualExpenses}
               onChange={(v) => set('annualExpenses', v)} prefix="$" step={1000}
               hint="Your expected annual spending once retired (today's dollars). Want FatFIRE? Just input higher expenses." />
           </InputCard>
 
           {/* Assumptions + Monte Carlo */}
-          <InputCard icon={Info} title="Assumptions" color="bg-slate-100 text-slate-500">
+          <InputCard icon={Info} title="Assumptions" color="bg-slate-100 text-slate-500" collapsible defaultOpen={false}
+            summary={`${inputs.expectedAnnualReturn}% return · ${inputs.withdrawalRate}% SWR${inputs.monteCarloEnabled ? ' · Monte Carlo on' : ''}`}>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Expected Return" value={inputs.expectedAnnualReturn}
                 onChange={(v) => set('expectedAnnualReturn', v)} suffix="%" step={0.5} max={30}
@@ -804,37 +832,52 @@ export default function FireCalculator() {
 
           {/* Life Events */}
           <div className="card p-5 space-y-3">
-            <p className="text-sm font-semibold text-slate-800">Life Events</p>
-            <div className="grid grid-cols-2 gap-2">
-              {([
-                ['home_purchase', 'Home Purchase', 'hover:text-fire-600 hover:bg-fire-50'],
-                ['windfall', 'Windfall', 'hover:text-violet-600 hover:bg-violet-50'],
-                ['contribution_change', 'Change Contribution', 'hover:text-sky-600 hover:bg-sky-50'],
-                ['return_change', 'Change Return', 'hover:text-amber-600 hover:bg-amber-50'],
-              ] as const).map(([type, label, hover]) => (
-                <button key={type} onClick={() => addEvent(type)}
-                  className={`flex items-center justify-center gap-1 text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1.5 rounded-lg transition-colors ${hover}`}>
-                  <Plus size={12} /> {label}
-                </button>
-              ))}
-            </div>
-
-            {inputs.events.length === 0 ? (
-              <p className="text-xs text-slate-400 py-2 text-center">
-                Add events to see their impact — home purchases, windfalls, contribution changes, or return shifts.
+            <button
+              onClick={() => setLifeEventsOpen(v => !v)}
+              className="w-full flex items-center justify-between"
+            >
+              <p className="text-sm font-semibold text-slate-800">
+                Life Events
+                {inputs.events.length > 0 && (
+                  <span className="ml-2 text-xs font-normal text-fire-500">{inputs.events.length} active</span>
+                )}
               </p>
-            ) : (
-              <div className="space-y-3">
-                {inputs.events.map((event) => {
-                  if (event.type === 'home_purchase')
-                    return <HomePurchaseForm key={event.id} event={event} onChange={(u) => updateEvent(u)} onDelete={() => deleteEvent(event.id)} />
-                  if (event.type === 'windfall')
-                    return <WindfallForm key={event.id} event={event} onChange={(u) => updateEvent(u)} onDelete={() => deleteEvent(event.id)} />
-                  if (event.type === 'contribution_change')
-                    return <ContributionChangeForm key={event.id} event={event} onChange={(u) => updateEvent(u)} onDelete={() => deleteEvent(event.id)} />
-                  return <ReturnChangeForm key={event.id} event={event} onChange={(u) => updateEvent(u)} onDelete={() => deleteEvent(event.id)} />
-                })}
-              </div>
+              <ChevronDown size={14} className={`text-slate-400 transition-transform duration-200 ${lifeEventsOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {lifeEventsOpen && (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    ['home_purchase', 'Home Purchase', 'hover:text-fire-600 hover:bg-fire-50'],
+                    ['windfall', 'Windfall', 'hover:text-violet-600 hover:bg-violet-50'],
+                    ['contribution_change', 'Change Contribution', 'hover:text-sky-600 hover:bg-sky-50'],
+                    ['return_change', 'Change Return', 'hover:text-amber-600 hover:bg-amber-50'],
+                  ] as const).map(([type, label, hover]) => (
+                    <button key={type} onClick={() => addEvent(type)}
+                      className={`flex items-center justify-center gap-1 text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1.5 rounded-lg transition-colors ${hover}`}>
+                      <Plus size={12} /> {label}
+                    </button>
+                  ))}
+                </div>
+
+                {inputs.events.length === 0 ? (
+                  <p className="text-xs text-slate-400 py-2 text-center">
+                    Add events to see their impact — home purchases, windfalls, contribution changes, or return shifts.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {inputs.events.map((event) => {
+                      if (event.type === 'home_purchase')
+                        return <HomePurchaseForm key={event.id} event={event} onChange={(u) => updateEvent(u)} onDelete={() => deleteEvent(event.id)} />
+                      if (event.type === 'windfall')
+                        return <WindfallForm key={event.id} event={event} onChange={(u) => updateEvent(u)} onDelete={() => deleteEvent(event.id)} />
+                      if (event.type === 'contribution_change')
+                        return <ContributionChangeForm key={event.id} event={event} onChange={(u) => updateEvent(u)} onDelete={() => deleteEvent(event.id)} />
+                      return <ReturnChangeForm key={event.id} event={event} onChange={(u) => updateEvent(u)} onDelete={() => deleteEvent(event.id)} />
+                    })}
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -1092,7 +1135,7 @@ export default function FireCalculator() {
           {/* Key numbers */}
           <div className="card p-5">
             <h2 className="text-sm font-semibold text-slate-700 mb-3">Key Numbers <span className="text-xs font-normal text-slate-400">(real dollars)</span></h2>
-            <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
               {[
                 ['FI Number', formatCurrencyFull(result.fiNumber)],
                 ['FIRE Age', result.fireAge ? `Age ${result.fireAge}` : '—'],

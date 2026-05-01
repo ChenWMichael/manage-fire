@@ -807,7 +807,7 @@ function FlowchartNodeBox({
 
   return (
     <div
-      className={`border border-slate-200 rounded-lg cursor-pointer transition-all w-64 bg-white ${
+      className={`border border-slate-200 rounded-lg cursor-pointer transition-all w-full sm:w-64 bg-white ${
         expanded ? 'shadow-md' : 'hover:shadow-sm hover:border-slate-300'
       }`}
       style={{ borderLeftColor: colors.hex, borderLeftWidth: '3px' }}
@@ -889,7 +889,7 @@ function FlowchartDecisionFork({
   return (
     <div className="flex flex-col items-center w-full">
       {/* Decision box — diamond marker + question */}
-      <div className={`border-2 rounded-lg p-3 w-72 ${colors.border} ${colors.bg} shadow-sm`}>
+      <div className={`border-2 rounded-lg p-3 w-full sm:w-72 ${colors.border} ${colors.bg} shadow-sm`}>
         <div className="flex items-start gap-2">
           <HelpCircle size={14} className={`${colors.text} flex-shrink-0 mt-0.5`} />
           <div className="flex-1 min-w-0">
@@ -927,14 +927,14 @@ function FlowchartDecisionFork({
         <>
           {/* Vertical stub down from decision box */}
           <div className="w-0.5 h-4 bg-gray-300" />
-          {/* Branch spread with horizontal connecting bar */}
-          <div className="relative w-full flex items-start">
+          {/* Branch spread — horizontal on desktop, vertical stack on mobile */}
+          <div className="relative w-full flex flex-col sm:flex-row items-center sm:items-start">
             <div
-              className="absolute top-0 h-0.5 bg-gray-300"
+              className="hidden sm:block absolute top-0 h-0.5 bg-gray-300"
               style={{ left: `${50 / N}%`, right: `${50 / N}%` }}
             />
             {item.branches.map((branch, bi) => (
-              <div key={bi} className="flex-1 flex flex-col items-center min-w-0">
+              <div key={bi} className="w-full sm:flex-1 flex flex-col items-center min-w-0">
                 {/* Vertical from horizontal bar */}
                 <div className="w-0.5 h-4 bg-gray-300" />
                 {/* Branch label — clickable */}
@@ -1107,15 +1107,16 @@ export default function FireFlowchart() {
   return (
     <div>
       {/* Header */}
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">FIRE Flow Guide</h1>
-          <p className="text-slate-500 text-sm mt-1">
-            Follow the sections in order. Make decisions to navigate your personal path. Click any card to expand its action checklist.
-          </p>
-        </div>
-        <div className="flex items-center gap-3 flex-shrink-0">
-          <div className="flex bg-slate-100 rounded-lg p-0.5">
+      <div className="mb-6">
+        {/* Title row — view switcher stays beside title on all screen sizes */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-slate-900">FIRE Flow Guide</h1>
+            <p className="text-slate-500 text-sm mt-1">
+              Follow the sections in order. Make decisions to navigate your personal path. Click any card to expand its action checklist.
+            </p>
+          </div>
+          <div className="flex bg-slate-100 rounded-lg p-0.5 flex-shrink-0">
             <button
               onClick={() => setView('steps')}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-md transition-all duration-150 ${
@@ -1135,11 +1136,12 @@ export default function FireFlowchart() {
               Chart
             </button>
           </div>
-          <div className="text-right">
-            <p className="text-xs text-slate-400">Overall progress</p>
-            <p className="text-sm font-semibold text-slate-700">{totalProgress.done}/{totalProgress.total} tasks</p>
-          </div>
-          <div className="w-20 h-2 rounded-full bg-slate-200">
+        </div>
+        {/* Controls row — progress + reset below title */}
+        <div className="flex items-center gap-3 mt-3">
+          <p className="text-xs text-slate-400 whitespace-nowrap">Overall progress</p>
+          <p className="text-sm font-semibold text-slate-700 whitespace-nowrap">{totalProgress.done}/{totalProgress.total} tasks</p>
+          <div className="w-20 h-2 rounded-full bg-slate-200 flex-shrink-0">
             <div
               className="h-full rounded-full bg-green-400 transition-all"
               style={{ width: `${totalProgress.total > 0 ? Math.round((totalProgress.done / totalProgress.total) * 100) : 0}%` }}
@@ -1147,7 +1149,7 @@ export default function FireFlowchart() {
           </div>
           <button
             onClick={() => { setDecisions({}); setTasksDone({}); setExpanded(new Set()) }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 hover:border-slate-300 rounded-lg transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 hover:border-slate-300 rounded-lg transition-all ml-auto"
           >
             <RotateCcw size={12} />
             Reset
@@ -1190,7 +1192,7 @@ export default function FireFlowchart() {
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
           {/* Unified chart canvas */}
           <div className="p-6 overflow-x-auto">
-            <div className="flex flex-col items-center min-w-[640px]">
+            <div className="flex flex-col items-center w-full sm:min-w-[640px]">
               {SECTIONS.map((section, si) => (
                 <Fragment key={section.id}>
                   {si > 0 && <div className="w-0.5 h-8 bg-gray-200" />}
