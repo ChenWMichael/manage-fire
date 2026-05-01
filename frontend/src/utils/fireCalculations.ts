@@ -46,10 +46,11 @@ function totalEffectiveMonthly(accounts: Account[]): number {
 const MC_RUNS = 1000
 
 function runMonteCarlo(inputs: FireInputs, fiNumber: number): MonteCarloResult {
-  const { currentAge, retirementAge, accounts, expectedAnnualReturn, returnStdDev, events } = inputs
+  const { currentAge, retirementAge, accounts, annualExpenses, expectedAnnualReturn, returnStdDev, events } = inputs
 
   const baseMonthlyContrib = totalEffectiveMonthly(accounts)
   const currentInvestments = accounts.reduce((s, a) => s + a.currentBalance, 0)
+  const monthlyExpense = annualExpenses / 12
 
   const maxYears = Math.min(60, 100 - currentAge)
   const retirementYear = Math.min(retirementAge - currentAge, maxYears)
@@ -64,6 +65,7 @@ function runMonteCarlo(inputs: FireInputs, fiNumber: number): MonteCarloResult {
 
     for (let year = 0; year <= maxYears; year++) {
       const age = currentAge + year
+      const retired = age >= retirementAge
 
       for (const event of events.filter((e) => e.age === age)) {
         if (event.type === 'windfall') {
@@ -85,7 +87,11 @@ function runMonteCarlo(inputs: FireInputs, fiNumber: number): MonteCarloResult {
       const annualReturn = Math.max(-0.9, sampleNormal(effectiveAnnualReturn / 100, returnStdDev / 100))
       const monthlyReturn = Math.pow(1 + annualReturn, 1 / 12) - 1
       for (let m = 0; m < 12; m++) {
-        investments = Math.max(0, investments * (1 + monthlyReturn) + effectiveMonthly)
+        if (retired) {
+          investments = Math.max(0, investments * (1 + monthlyReturn) - monthlyExpense)
+        } else {
+          investments = Math.max(0, investments * (1 + monthlyReturn) + effectiveMonthly)
+        }
       }
     }
   }
@@ -126,8 +132,11 @@ export function calculateFire(inputs: FireInputs): FireResult {
   let effectiveMonthly = baseMonthlyContrib
   const maxYears = Math.min(60, 100 - currentAge)
 
+  const monthlyExpense = annualExpenses / 12
+
   for (let year = 0; year <= maxYears; year++) {
     const age = currentAge + year
+    const retired = age >= retirementAge
 
     for (const event of events.filter((e) => e.age === age)) {
       if (event.type === 'windfall') {
@@ -145,7 +154,11 @@ export function calculateFire(inputs: FireInputs): FireResult {
     projections.push({ year, age, investments: Math.round(investments) })
 
     for (let m = 0; m < 12; m++) {
-      investments = investments * (1 + rInvMonthly) + effectiveMonthly
+      if (retired) {
+        investments = Math.max(0, investments * (1 + rInvMonthly) - monthlyExpense)
+      } else {
+        investments = investments * (1 + rInvMonthly) + effectiveMonthly
+      }
     }
   }
 
