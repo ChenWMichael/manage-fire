@@ -8,6 +8,7 @@ import FireFlowchart from './pages/FireFlowchart'
 import OfferSimulator from './pages/OfferSimulator'
 import RentBuyCalculator from './pages/RentBuyCalculator'
 import HouseAffordabilityCalculator from './pages/HouseAffordabilityCalculator'
+import CreditCards from './pages/CreditCards'
 import LandingPage from './pages/LandingPage'
 import Profile from './pages/Profile'
 
@@ -28,6 +29,7 @@ export default function App() {
           <Route path="offer" element={<OfferSimulator />} />
           <Route path="rent-vs-buy" element={<RentBuyCalculator />} />
           <Route path="house-affordability" element={<HouseAffordabilityCalculator />} />
+          <Route path="credit-cards" element={<CreditCards />} />
 
           {/* Protected: require sign-in */}
           <Route

@@ -121,6 +121,80 @@ export interface FireScenario {
   updated_at: string
 }
 
+// ─── Credit Card Portfolio ────────────────────────────────────────────────────
+
+export type RewardType = 'cashback' | 'points'
+
+export type SpendingCategory =
+  | 'dining'
+  | 'groceries'
+  | 'gas'
+  | 'flights'
+  | 'hotels'
+  | 'streaming'
+  | 'drugstore'
+  | 'transit'
+  | 'onlineShopping'
+  | 'utilities'
+  | 'entertainment'
+  | 'warehouse'
+  | 'base'
+
+export interface CardRewards {
+  dining: number
+  groceries: number
+  gas: number
+  flights: number
+  hotels: number
+  streaming: number
+  drugstore: number
+  transit: number
+  onlineShopping: number
+  utilities: number
+  entertainment: number
+  warehouse: number
+  base: number
+  [key: string]: number
+}
+
+export interface CreditCard {
+  id: string
+  name: string
+  issuer: string
+  rewardType: RewardType
+  rewards: CardRewards
+  annualFee: number
+  note?: string
+}
+
+export interface CustomCategory {
+  id: string
+  label: string
+  emoji: string
+}
+
+export interface CustomCard {
+  id: string
+  name: string
+  issuer: string
+  rewardType: RewardType
+  annualFee: number
+  rewards: Record<string, number>
+  note?: string
+  isCustom: true
+}
+
+export interface CreditCardPortfolio {
+  wallet: string[]
+  wishlist: string[]
+  customCategories: CustomCategory[]
+  customCards: CustomCard[]
+  rateOverrides: Record<string, Record<string, number>>
+  coverageThreshold: number
+}
+
+// ─── FIRE type metadata ───────────────────────────────────────────────────────
+
 export const FIRE_TYPE_META: Record<string, { label: string; description: string; color: string }> = {
   regular: { label: 'FIRE', description: 'Standard retirement based on your annual expenses', color: 'text-fire-700 bg-fire-50 border-fire-200' },
   coast: { label: 'CoastFIRE', description: 'Save now, let it grow, coast to retirement', color: 'text-blue-600 bg-blue-50 border-blue-200' },

@@ -4,6 +4,7 @@ import {
   Building2,
   Calculator,
   ChevronRight,
+  CreditCard,
   Flame,
   GitBranch,
   Home,
@@ -21,6 +22,7 @@ const navItems = [
   { to: '/app/offer', icon: Briefcase, label: 'Offer Simulator', public: true },
   { to: '/app/rent-vs-buy', icon: Home, label: 'Rent vs. Buy', public: true },
   { to: '/app/house-affordability', icon: Building2, label: 'House Affordability', public: true },
+  { to: '/app/credit-cards', icon: CreditCard, label: 'Credit Cards', public: true },
   { to: '/app/dashboard', icon: LayoutDashboard, label: 'Dashboard', public: false },
   { to: '/app/profile', icon: User, label: 'Profile', public: false },
 ]
@@ -34,7 +36,7 @@ export default function Sidebar() {
   const { user, signOut } = useAuth()
 
   return (
-    <aside className="w-64 min-h-screen bg-slate-900 flex flex-col flex-shrink-0">
+    <aside className="w-64 h-full min-h-screen bg-slate-900 flex flex-col flex-shrink-0">
       {/* Brand */}
       <div className="px-6 py-5 border-b border-slate-800">
         <Link to="/app/calculator" className="flex items-center gap-2.5">
