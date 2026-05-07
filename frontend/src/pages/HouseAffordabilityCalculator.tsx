@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useState } from 'react'
 import {
   AlertCircle, Building2, CheckCircle, CheckCircle2, ChevronDown, ChevronUp,
-  Gift, Home, Loader2, MapPin, PiggyBank, Receipt, Target, Users, XCircle,
+  Gift, Loader2, MapPin, PiggyBank, Receipt, Target, Users, XCircle,
   type LucideIcon,
 } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -334,10 +334,7 @@ export default function HouseAffordabilityCalculator() {
     <div className="max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-          <Home size={24} className="text-fire-500" />
-          House Affordability Calculator
-        </h1>
+        <h1 className="text-2xl font-bold text-slate-900">House Affordability Calculator</h1>
         <p className="text-slate-500 text-sm mt-1">
           Find out how much home you can comfortably afford based on your income, debts, savings, and location.
         </p>

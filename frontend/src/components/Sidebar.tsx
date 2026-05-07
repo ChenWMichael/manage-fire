@@ -4,6 +4,7 @@ import {
   Building2,
   Calculator,
   ChevronRight,
+  CreditCard,
   Flame,
   GitBranch,
   Home,
@@ -22,6 +23,7 @@ const navItems = [
   { to: '/app/offer', icon: Briefcase, label: 'Offer Simulator', public: true },
   { to: '/app/rent-vs-buy', icon: Home, label: 'Rent vs. Buy', public: true },
   { to: '/app/house-affordability', icon: Building2, label: 'House Affordability', public: true },
+  { to: '/app/credit-cards', icon: CreditCard, label: 'Credit Cards', public: true },
   { to: '/app/dashboard', icon: LayoutDashboard, label: 'Dashboard', public: false },
   { to: '/app/profile', icon: User, label: 'Profile', public: false },
 ]

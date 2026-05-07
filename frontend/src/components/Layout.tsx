@@ -1,6 +1,6 @@
-import { Flame, Menu } from 'lucide-react'
 import { useState } from 'react'
 import { Link, Outlet } from 'react-router-dom'
+import { Flame, Menu } from 'lucide-react'
 import Sidebar from './Sidebar'
 
 export default function Layout() {

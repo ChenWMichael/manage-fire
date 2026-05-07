@@ -1,16 +1,24 @@
 import {
-  ArrowRight, Briefcase, Calculator, Check, Flame, Home, Loader2, Pencil, Target, Trash2,
-  TrendingUp, Waves, Zap,
+  ArrowRight, Briefcase, Calculator, Check, CreditCard,
+  Flame, Home, Loader2, Pencil, Target, Trash2, TrendingUp, Waves, Zap,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import StatCard from '../components/StatCard'
 import { useAuth } from '../hooks/useAuth'
+import { useLocalStorage } from '../hooks/useLocalStorage'
 import { deleteSnapshot, deleteSnapshots, getSnapshots } from '../lib/api'
 import type { Snapshot } from '../lib/api'
-import type { FireResult } from '../types'
+import type { CreditCardPortfolio, FireResult } from '../types'
 import { FIRE_TYPE_META } from '../types'
 import { formatCurrency, formatCurrencyFull } from '../utils/fireCalculations'
+import {
+  DEFAULT_PORTFOLIO,
+  SPENDING_CATEGORIES,
+  computeCoverage,
+  getGapCategories,
+  getRecommendations,
+} from '../utils/creditCardData'
 
 const tools = [
   {
@@ -313,6 +321,28 @@ export default function Dashboard() {
     }
   }
 
+  const [ccPortfolio] = useLocalStorage<CreditCardPortfolio>('credit-card-portfolio', DEFAULT_PORTFOLIO)
+
+  const cc = useMemo(() => {
+    const safe = {
+      wallet:           ccPortfolio.wallet           ?? [],
+      customCategories: ccPortfolio.customCategories ?? [],
+      customCards:      ccPortfolio.customCards      ?? [],
+      rateOverrides:    ccPortfolio.rateOverrides    ?? {},
+      coverageThreshold: ccPortfolio.coverageThreshold ?? 3,
+    }
+    const allCategories: { key: string; label: string; emoji: string }[] = [
+      ...(SPENDING_CATEGORIES as { key: string; label: string; emoji: string }[]),
+      ...safe.customCategories.map(c => ({ key: c.id, label: c.label, emoji: c.emoji })),
+    ]
+    const allKeys = allCategories.map(c => c.key)
+    const coverage = computeCoverage(safe.wallet, safe.customCards, safe.rateOverrides, allKeys)
+    const gaps = getGapCategories(coverage, allKeys, safe.coverageThreshold)
+    const recs = getRecommendations(safe.wallet, [], safe.customCards, safe.rateOverrides, gaps.slice(0, 3))
+    const coveredCount = allKeys.filter(k => (coverage[k]?.rate ?? 0) >= safe.coverageThreshold).length
+    return { safe, allCategories, coverage, gaps, recs, coveredCount, totalCats: allKeys.length }
+  }, [ccPortfolio])
+
   const name = user?.user_metadata?.full_name as string | undefined
     || user?.email?.split('@')[0]
     || 'there'
@@ -407,6 +437,74 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Credit Card Portfolio Widget */}
+      <div className="card p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-sky-50 text-sky-600">
+              <CreditCard size={15} />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">Credit Card Portfolio</h2>
+              {cc.safe.wallet.length > 0 ? (
+                <p className="text-xs text-slate-400">
+                  {cc.safe.wallet.length} card{cc.safe.wallet.length !== 1 ? 's' : ''}
+                  {' · '}{cc.coveredCount}/{cc.totalCats} at {cc.safe.coverageThreshold}x+
+                  {cc.gaps.length > 0 && (
+                    <span className="text-amber-500"> · {cc.gaps.length} gap{cc.gaps.length !== 1 ? 's' : ''}</span>
+                  )}
+                  {cc.gaps.length === 0 && (
+                    <span className="text-emerald-500"> · all covered</span>
+                  )}
+                </p>
+              ) : (
+                <p className="text-xs text-slate-400">No cards added yet</p>
+              )}
+            </div>
+          </div>
+          <Link to="/app/credit-cards" className="flex items-center gap-1 text-xs text-slate-400 hover:text-fire-600 transition-colors">
+            Open <ArrowRight size={12} />
+          </Link>
+        </div>
+
+        {cc.safe.wallet.length === 0 ? (
+          <div className="flex flex-col items-center py-3 text-center">
+            <p className="text-sm text-slate-500 mb-3">
+              Set up your portfolio to see reward coverage at a glance.
+            </p>
+            <Link to="/app/credit-cards" className="btn-primary text-sm inline-flex items-center gap-2">
+              Set up portfolio <ArrowRight size={14} />
+            </Link>
+          </div>
+        ) : (
+          <div className="grid grid-cols-5 sm:grid-cols-7 gap-1.5">
+            {cc.allCategories.map(cat => {
+              const cov = cc.coverage[cat.key] ?? { rate: 1, cardId: null, rewardType: null }
+              const t = cc.safe.coverageThreshold
+              const bg = cov.rate >= t + 1 ? 'bg-emerald-50 border-emerald-200'
+                : cov.rate >= t       ? 'bg-fire-50 border-fire-200'
+                : cov.rate > 1        ? 'bg-amber-50 border-amber-200'
+                :                       'bg-slate-50 border-slate-200'
+              const text = cov.rate >= t + 1 ? 'text-emerald-600'
+                : cov.rate >= t       ? 'text-fire-600'
+                : cov.rate > 1        ? 'text-amber-600'
+                :                       'text-slate-400'
+              return (
+                <div key={cat.key} className={`rounded-lg border p-1.5 flex flex-col items-center gap-0.5 ${bg}`}>
+                  <span className="text-sm leading-none">{cat.emoji}</span>
+                  <span className={`text-[11px] font-bold leading-none tabular-nums ${text}`}>
+                    {cov.rewardType === 'points' ? `${cov.rate}x` : `${cov.rate}%`}
+                  </span>
+                  <span className="text-[8px] text-slate-400 leading-tight text-center w-full truncate">
+                    {cat.label}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Saved Snapshots */}
       <div>
