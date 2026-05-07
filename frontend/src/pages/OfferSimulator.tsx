@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useState } from 'react'
-import { Briefcase, CheckCircle, Loader2, Plus, Trash2 } from 'lucide-react'
+import { Briefcase, CheckCircle, ChevronDown, Loader2, Plus, Trash2 } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useLocalStorage } from '../hooks/useLocalStorage'
@@ -159,6 +159,8 @@ function OfferCard({
   k401Limit: number
 }) {
   const set = <K extends keyof Offer>(key: K, val: Offer[K]) => onChange({ ...offer, [key]: val })
+  const [rsuOpen, setRsuOpen] = useState(false)
+  const [k401Open, setK401Open] = useState(false)
 
   return (
     <div className="card p-5 space-y-3" style={{ borderTop: `3px solid ${colors.accent}` }}>
@@ -191,25 +193,57 @@ function OfferCard({
         <NField label="Signing Bonus" value={offer.signingBonus} onChange={v => set('signingBonus', v)} prefix="$" hint="Year 1 only" />
       </div>
 
-      <div className="border-t border-slate-100 pt-3 space-y-3">
-        <NField label="RSU Total Grant" value={offer.rsuTotalGrant} onChange={v => set('rsuTotalGrant', v)} prefix="$" hint="full 4-yr value" />
-        <SField
-          label="Vesting Schedule"
-          value={offer.rsuSchedule}
-          onChange={v => set('rsuSchedule', v)}
-          options={RSU_SCHEDULES}
-        />
+      <div className="border-t border-slate-100 pt-3">
+        <button
+          onClick={() => setRsuOpen(v => !v)}
+          className="w-full flex items-center justify-between text-xs font-semibold text-slate-600"
+        >
+          <span>
+            RSU / Equity
+            {!rsuOpen && offer.rsuTotalGrant > 0 && (
+              <span className="ml-1.5 font-normal text-slate-400">${(offer.rsuTotalGrant / 1000).toFixed(0)}K grant</span>
+            )}
+          </span>
+          <ChevronDown size={13} className={`text-slate-400 transition-transform duration-200 ${rsuOpen ? 'rotate-180' : ''}`} />
+        </button>
+        {rsuOpen && (
+          <div className="mt-3 space-y-3">
+            <NField label="RSU Total Grant" value={offer.rsuTotalGrant} onChange={v => set('rsuTotalGrant', v)} prefix="$" hint="full 4-yr value" />
+            <SField
+              label="Vesting Schedule"
+              value={offer.rsuSchedule}
+              onChange={v => set('rsuSchedule', v)}
+              options={RSU_SCHEDULES}
+            />
+          </div>
+        )}
       </div>
 
       <div className="border-t border-slate-100 pt-3">
-        <NField
-          label="401(k) Contribution"
-          value={offer.k401Pct}
-          onChange={v => set('k401Pct', v)}
-          suffix="% of base"
-          step={1}
-          hint={`max $${k401Limit.toLocaleString()}${k401Limit > K401_BASE ? ' (catch-up)' : ''}`}
-        />
+        <button
+          onClick={() => setK401Open(v => !v)}
+          className="w-full flex items-center justify-between text-xs font-semibold text-slate-600"
+        >
+          <span>
+            401(k)
+            {!k401Open && (
+              <span className="ml-1.5 font-normal text-slate-400">{offer.k401Pct}% of base</span>
+            )}
+          </span>
+          <ChevronDown size={13} className={`text-slate-400 transition-transform duration-200 ${k401Open ? 'rotate-180' : ''}`} />
+        </button>
+        {k401Open && (
+          <div className="mt-3">
+            <NField
+              label="401(k) Contribution"
+              value={offer.k401Pct}
+              onChange={v => set('k401Pct', v)}
+              suffix="% of base"
+              step={1}
+              hint={`max $${k401Limit.toLocaleString()}${k401Limit > K401_BASE ? ' (catch-up)' : ''}`}
+            />
+          </div>
+        )}
       </div>
     </div>
   )

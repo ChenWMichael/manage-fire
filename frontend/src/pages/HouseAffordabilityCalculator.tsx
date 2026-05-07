@@ -118,22 +118,33 @@ function Field({
 }
 
 function InputCard({
-  icon: Icon, title, color = 'bg-slate-50 text-slate-600', children,
+  icon: Icon, title, color = 'bg-slate-50 text-slate-600', children, collapsible, defaultOpen = true,
 }: {
   icon: LucideIcon
   title: string
   color?: string
   children: React.ReactNode
+  collapsible?: boolean
+  defaultOpen?: boolean
 }) {
+  const [open, setOpen] = useState(defaultOpen)
   return (
     <div className="card overflow-hidden">
-      <div className="px-5 py-3.5 border-b border-slate-100 flex items-center gap-3">
+      <div
+        className={`px-5 py-3.5 ${(!collapsible || open) ? 'border-b border-slate-100' : ''} flex items-center gap-3 ${collapsible ? 'cursor-pointer select-none hover:bg-slate-50 transition-colors' : ''}`}
+        onClick={collapsible ? () => setOpen(v => !v) : undefined}
+      >
         <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${color}`}>
           <Icon size={14} />
         </div>
-        <h3 className="font-semibold text-slate-800 text-sm">{title}</h3>
+        <h3 className="font-semibold text-slate-800 text-sm flex-1">{title}</h3>
+        {collapsible && (
+          <ChevronDown size={14} className={`text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+        )}
       </div>
-      <div className="px-5 py-4 space-y-4">{children}</div>
+      {(!collapsible || open) && (
+        <div className="px-5 py-4 space-y-4">{children}</div>
+      )}
     </div>
   )
 }
@@ -334,7 +345,7 @@ export default function HouseAffordabilityCalculator() {
         <div className="xl:col-span-2 space-y-4">
 
           {/* Household Income */}
-          <InputCard icon={Users} title="Household Income" color="bg-emerald-50 text-emerald-600">
+          <InputCard icon={Users} title="Household Income" color="bg-emerald-50 text-emerald-600" collapsible>
             <div>
               <label htmlFor="house-filing" className="label">Filing Status</label>
               <select
@@ -392,7 +403,7 @@ export default function HouseAffordabilityCalculator() {
           </InputCard>
 
           {/* Savings & Down Payment */}
-          <InputCard icon={PiggyBank} title="Savings & Down Payment" color="bg-sky-50 text-sky-600">
+          <InputCard icon={PiggyBank} title="Savings & Down Payment" color="bg-sky-50 text-sky-600" collapsible>
             <div className="grid grid-cols-2 gap-3">
               <Field
                 label="Total Available Savings"
@@ -449,7 +460,7 @@ export default function HouseAffordabilityCalculator() {
           </InputCard>
 
           {/* Location */}
-          <InputCard icon={MapPin} title="Location" color="bg-violet-50 text-violet-600">
+          <InputCard icon={MapPin} title="Location" color="bg-violet-50 text-violet-600" collapsible>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label htmlFor="house-state" className="label flex items-center gap-1">
@@ -481,7 +492,7 @@ export default function HouseAffordabilityCalculator() {
           </InputCard>
 
           {/* Mortgage */}
-          <InputCard icon={Building2} title="Mortgage" color="bg-fire-50 text-fire-600">
+          <InputCard icon={Building2} title="Mortgage" color="bg-fire-50 text-fire-600" collapsible>
             <div>
               <label htmlFor="house-credit" className="label flex items-center gap-1">
                 Credit Score Range
@@ -569,8 +580,8 @@ export default function HouseAffordabilityCalculator() {
           </InputCard>
 
           {/* Monthly Costs */}
-          <InputCard icon={Receipt} title="Monthly Housing Costs" color="bg-teal-50 text-teal-600">
-            <div className="grid grid-cols-3 gap-3 items-end">
+          <InputCard icon={Receipt} title="Monthly Housing Costs" color="bg-teal-50 text-teal-600" collapsible>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Field
                 label="HOA Fee"
                 value={inputs.hoaMonthly}
@@ -602,11 +613,11 @@ export default function HouseAffordabilityCalculator() {
           </InputCard>
 
           {/* Roommates / Rental Income */}
-          <InputCard icon={Users} title="Roommates & Rental Income (Optional)" color="bg-indigo-50 text-indigo-600">
+          <InputCard icon={Users} title="Roommates & Rental Income (Optional)" color="bg-indigo-50 text-indigo-600" collapsible defaultOpen={false}>
             <p className="text-xs text-slate-400 -mt-1">
               Planning to rent out room(s)? Rental income reduces your net monthly housing cost and can make a more expensive home viable.
             </p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <p className="label flex items-center gap-1">
                   Number of Roommates
@@ -652,7 +663,7 @@ export default function HouseAffordabilityCalculator() {
           </InputCard>
 
           {/* Analyze a Specific Home */}
-          <InputCard icon={Target} title="Analyze a Specific Home (Optional)" color="bg-amber-50 text-amber-600">
+          <InputCard icon={Target} title="Analyze a Specific Home (Optional)" color="bg-amber-50 text-amber-600" collapsible defaultOpen={false}>
             <Field
               label="Target Home Price"
               value={inputs.targetHomePrice}

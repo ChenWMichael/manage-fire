@@ -12,6 +12,7 @@ import {
   LogIn,
   LogOut,
   User,
+  X,
 } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
@@ -31,20 +32,35 @@ const comingSoon = [
   { icon: BarChart3, label: 'Net Worth Tracker' },
 ]
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const location = useLocation()
   const { user, signOut } = useAuth()
 
   return (
-    <aside className="w-64 h-full min-h-screen bg-slate-900 flex flex-col flex-shrink-0">
+    <aside
+      className={`
+        fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 flex flex-col flex-shrink-0
+        transform transition-transform duration-300 ease-in-out
+        ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+        lg:static lg:z-auto lg:translate-x-0
+      `}
+    >
       {/* Brand */}
-      <div className="px-6 py-5 border-b border-slate-800">
-        <Link to="/app/calculator" className="flex items-center gap-2.5">
+      <div className="px-6 py-5 border-b border-slate-800 flex items-center justify-between">
+        <Link to="/app/calculator" className="flex items-center gap-2.5" onClick={onClose}>
           <div className="w-8 h-8 bg-fire-500 rounded-lg flex items-center justify-center shadow-lg shadow-fire-500/20">
             <Flame className="text-white" size={18} />
           </div>
           <span className="text-white font-bold text-lg tracking-tight">ManageFIRE</span>
         </Link>
+        {/* Close button — mobile only */}
+        <button
+          onClick={onClose}
+          className="lg:hidden text-slate-400 hover:text-white transition-colors p-1"
+          aria-label="Close menu"
+        >
+          <X size={18} />
+        </button>
       </div>
 
       {/* Navigation */}
@@ -59,6 +75,7 @@ export default function Sidebar() {
               <Link
                 key={to}
                 to="/auth"
+                onClick={onClose}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-400 hover:bg-slate-800/50 transition-all duration-150"
                 title="Sign in to access"
               >
@@ -75,6 +92,7 @@ export default function Sidebar() {
             <Link
               key={to}
               to={to}
+              onClick={onClose}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
                 active
                   ? 'bg-fire-500 text-white shadow-md shadow-fire-500/20'
@@ -130,6 +148,7 @@ export default function Sidebar() {
         ) : (
           <Link
             to="/auth"
+            onClick={onClose}
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-all duration-150"
           >
             <LogIn size={16} />

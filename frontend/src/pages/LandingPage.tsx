@@ -63,7 +63,7 @@ export default function LandingPage() {
 
       {/* Hero */}
       <section className="bg-slate-50 border-b border-slate-100">
-        <div className="max-w-5xl mx-auto px-6 py-20">
+        <div className="max-w-5xl mx-auto px-6 py-12 sm:py-20">
           <h1 className="text-4xl font-bold text-slate-900 mb-4 leading-snug max-w-xl">
             Tools for thinking through your financial independence
           </h1>
@@ -104,7 +104,7 @@ export default function LandingPage() {
 
       {/* Suggest a tool */}
       <section className="border-t border-slate-100 bg-slate-50">
-        <div className="max-w-5xl mx-auto px-6 py-10 flex items-center justify-between gap-6">
+        <div className="max-w-5xl mx-auto px-6 py-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <p className="font-medium text-slate-700 mb-0.5">Missing something?</p>
             <p className="text-sm text-slate-500">If there's a calculator or tool you'd find useful, send a suggestion.</p>
@@ -119,12 +119,12 @@ export default function LandingPage() {
       </section>
 
       <footer className="border-t border-slate-100 py-6">
-        <div className="max-w-5xl mx-auto px-6 flex items-center justify-between text-xs text-slate-400">
+        <div className="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-slate-400">
           <div className="flex items-center gap-1.5">
             <Flame size={12} className="text-fire-400" />
             <span>ManageFIRE</span>
           </div>
-          <span>Not financial advice. Consult a professional for your situation.</span>
+          <span className="sm:text-right">Not financial advice. Consult a professional for your situation.</span>
         </div>
       </footer>
     </div>

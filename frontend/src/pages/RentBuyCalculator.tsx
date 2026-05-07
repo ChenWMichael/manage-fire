@@ -103,18 +103,28 @@ function Field({
   )
 }
 
-function InputCard({ icon: Icon, title, color, children }: {
+function InputCard({ icon: Icon, title, color, children, collapsible, defaultOpen = true }: {
   icon: React.ElementType; title: string; color: string; children: React.ReactNode
+  collapsible?: boolean; defaultOpen?: boolean
 }) {
+  const [open, setOpen] = useState(defaultOpen)
   return (
     <div className="card p-5 space-y-4">
-      <div className="flex items-center gap-2">
-        <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${color}`}>
-          <Icon size={14} />
+      <div
+        className={`flex items-center justify-between ${collapsible ? 'cursor-pointer select-none' : 'gap-2'}`}
+        onClick={collapsible ? () => setOpen(v => !v) : undefined}
+      >
+        <div className="flex items-center gap-2">
+          <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${color}`}>
+            <Icon size={14} />
+          </div>
+          <p className="text-sm font-semibold text-slate-800">{title}</p>
         </div>
-        <p className="text-sm font-semibold text-slate-800">{title}</p>
+        {collapsible && (
+          <ChevronDown size={14} className={`text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+        )}
       </div>
-      {children}
+      {(!collapsible || open) && children}
     </div>
   )
 }
@@ -355,7 +365,7 @@ export default function RentBuyCalculator() {
         <div className="xl:col-span-2 space-y-4">
 
           {/* Location & Property */}
-          <InputCard icon={Home} title="Property" color="bg-violet-50 text-violet-600">
+          <InputCard icon={Home} title="Property" color="bg-violet-50 text-violet-600" collapsible>
             <div>
               <label htmlFor="rent-buy-state" className="block text-sm font-medium text-slate-700 mb-1">State</label>
               <select
@@ -407,7 +417,7 @@ export default function RentBuyCalculator() {
           </InputCard>
 
           {/* Mortgage */}
-          <InputCard icon={TrendingUp} title="Mortgage" color="bg-fire-50 text-fire-600">
+          <InputCard icon={TrendingUp} title="Mortgage" color="bg-fire-50 text-fire-600" collapsible>
             <div className="grid grid-cols-2 gap-3">
               <Field
                 label="Interest Rate"
@@ -450,7 +460,7 @@ export default function RentBuyCalculator() {
           </InputCard>
 
           {/* Rental Alternative */}
-          <InputCard icon={Home} title="Rental Alternative" color="bg-sky-50 text-sky-600">
+          <InputCard icon={Home} title="Rental Alternative" color="bg-sky-50 text-sky-600" collapsible>
             <div className="grid grid-cols-2 gap-3">
               <Field
                 label="Monthly Rent"
@@ -473,7 +483,7 @@ export default function RentBuyCalculator() {
           </InputCard>
 
           {/* Analysis Settings */}
-          <InputCard icon={TrendingUp} title="Analysis" color="bg-emerald-50 text-emerald-600">
+          <InputCard icon={TrendingUp} title="Analysis" color="bg-emerald-50 text-emerald-600" collapsible>
             <div className="grid grid-cols-2 gap-3">
               <Field
                 label="Years to Analyze"
@@ -779,7 +789,7 @@ export default function RentBuyCalculator() {
             <h2 className="text-sm font-semibold text-slate-700 mb-3">
               Monthly Costs — Year 1
             </h2>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Buy breakdown */}
               <div className="space-y-2">
                 <p className="text-xs font-bold text-violet-600 uppercase tracking-wide mb-2">Buying</p>
